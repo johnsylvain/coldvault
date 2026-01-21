@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  coldvault:
+    build: .
+    image: coldvault/coldvault:1.0.0
+    container_name: coldvault
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - /mnt:/mnt:ro
+    environment:
+      - TZ=${TZ:-America/Chicago}
+      - DATABASE_URL=postgresql://coldvault:${DB_PASSWORD:-changeme}@db:5432/coldvault
+      - POSTGRES_HOST=db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - db
+    networks:
+      - coldvault-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: coldvault-db
+    environment:
+      - POSTGRES_DB=coldvault
+      - POSTGRES_USER=coldvault
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    networks:
+      - coldvault-network
+    restart: unless-stopped
+
+networks:
+  coldvault-network:
+    driver: bridge
