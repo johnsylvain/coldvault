@@ -6,8 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import logging
 
-from app.api import jobs, backups, restore, dashboard, notifications, test_upload, diagnostics
+logger = logging.getLogger(__name__)
+
+from app.api import jobs, backups, restore, dashboard, notifications, test_upload, diagnostics, sync, metrics
 from app.database import engine, Base
 from app.scheduler import scheduler
 from app.config import settings
@@ -42,6 +45,8 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(test_upload.router, prefix="/api", tags=["test"])
 app.include_router(diagnostics.router, prefix="/api", tags=["diagnostics"])
+app.include_router(sync.router, prefix="/api", tags=["sync"])
+app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 
 # Serve static files (dashboard UI)
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -71,6 +76,18 @@ async def startup_event():
     from app.worker import backup_worker
     backup_worker._recover_orphaned_backups()
     scheduler.start()
+    
+    # Record initial metrics if none exist today
+    from app.metrics import metrics_service
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        metrics_service.record_daily_metrics(db)
+        logger.info("Initial metrics recorded on startup")
+    except Exception as e:
+        logger.warning(f"Could not record initial metrics: {e}")
+    finally:
+        db.close()
 
 @app.on_event("shutdown")
 async def shutdown_event():

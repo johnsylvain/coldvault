@@ -162,6 +162,33 @@ class Notification(Base):
     email_sent = Column(Boolean, default=False)
     webhook_sent = Column(Boolean, default=False)
 
+class StorageMetrics(Base):
+    """Daily snapshots of storage usage and costs"""
+    __tablename__ = "storage_metrics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Total storage by class (bytes)
+    total_size_bytes = Column(Integer, default=0)
+    size_standard_bytes = Column(Integer, default=0)
+    size_glacier_ir_bytes = Column(Integer, default=0)
+    size_glacier_flexible_bytes = Column(Integer, default=0)
+    size_deep_archive_bytes = Column(Integer, default=0)
+    
+    # Total files
+    total_files = Column(Integer, default=0)
+    
+    # Calculated costs (monthly, in USD)
+    monthly_cost_estimate = Column(Float, default=0.0)
+    cost_standard = Column(Float, default=0.0)
+    cost_glacier_ir = Column(Float, default=0.0)
+    cost_glacier_flexible = Column(Float, default=0.0)
+    cost_deep_archive = Column(Float, default=0.0)
+    
+    # Per-job breakdown (JSON)
+    job_breakdown = Column(Text)  # JSON: {job_id: {size_bytes, cost, storage_class}}
+
 def get_db():
     """Dependency for database sessions"""
     db = SessionLocal()
@@ -211,6 +238,32 @@ def migrate_database():
             conn.execute(text("ALTER TABLE snapshots ADD COLUMN files_unchanged INTEGER"))
             conn.commit()
             logger.info("Migration complete: added files_unchanged column")
+        
+        # Check if storage_metrics table exists
+        tables = inspector.get_table_names()
+        if 'storage_metrics' not in tables:
+            logger.info("Creating storage_metrics table...")
+            conn.execute(text("""
+                CREATE TABLE storage_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recorded_at DATETIME NOT NULL,
+                    total_size_bytes INTEGER DEFAULT 0,
+                    size_standard_bytes INTEGER DEFAULT 0,
+                    size_glacier_ir_bytes INTEGER DEFAULT 0,
+                    size_glacier_flexible_bytes INTEGER DEFAULT 0,
+                    size_deep_archive_bytes INTEGER DEFAULT 0,
+                    total_files INTEGER DEFAULT 0,
+                    monthly_cost_estimate REAL DEFAULT 0.0,
+                    cost_standard REAL DEFAULT 0.0,
+                    cost_glacier_ir REAL DEFAULT 0.0,
+                    cost_glacier_flexible REAL DEFAULT 0.0,
+                    cost_deep_archive REAL DEFAULT 0.0,
+                    job_breakdown TEXT
+                )
+            """))
+            conn.execute(text("CREATE INDEX idx_storage_metrics_recorded_at ON storage_metrics(recorded_at)"))
+            conn.commit()
+            logger.info("Migration complete: created storage_metrics table")
             
     except Exception as e:
         logger.error(f"Migration failed: {e}")

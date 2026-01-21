@@ -175,8 +175,10 @@ class RestoreWorker:
                 logger.error(f"Failed to download {rel_path}: {e}")
                 return False
         
-        # Download files in parallel
-        max_workers = min(10, total_files)
+        # Download files in parallel (use configurable limit)
+        from app.config import settings
+        max_workers = min(settings.backup_upload_threads, total_files)
+        logger.info(f"Restoring with {max_workers} thread(s)")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
                 executor.submit(download_file, rel_path, file_data): rel_path

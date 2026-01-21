@@ -4,330 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ColdVault - Backup Dashboard</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px 0;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .stat-card h3 {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        
-        .jobs-section {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        
-        .jobs-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .btn {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        
-        .btn:hover {
-            background: #2980b9;
-        }
-        
-        .btn-success {
-            background: #27ae60;
-        }
-        
-        .btn-success:hover {
-            background: #229954;
-        }
-        
-        .btn-danger {
-            background: #e74c3c;
-        }
-        
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-        
-        .job-item {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-            margin-bottom: 10px;
-        }
-        
-        .job-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .job-info {
-            text-align: left;
-        }
-        
-        .job-info h4 {
-            margin-bottom: 5px;
-        }
-        
-        .job-info .meta {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .job-logs {
-            margin-top: 15px;
-            display: none;
-        }
-        
-        .job-logs.expanded {
-            display: block;
-        }
-        
-        .log-toggle {
-            background: #f8f9fa;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            font-size: 12px;
-            color: #666;
-            margin-top: 10px;
-            display: inline-block;
-            transition: background 0.2s;
-        }
-        
-        .log-toggle:hover {
-            background: #e9ecef;
-        }
-        
-        .log-toggle::before {
-            content: '▶ ';
-            display: inline-block;
-            transition: transform 0.2s;
-        }
-        
-        .log-toggle.expanded::before {
-            transform: rotate(90deg);
-        }
-        
-        .log-content-inline {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            margin-top: 10px;
-            text-align: left;
-            direction: ltr;
-        }
-        
-        .notification {
-            background: #d4edda;
-            color: #155724;
-            padding: 10px 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            display: none;
-            animation: slideIn 0.3s ease-out;
-        }
-        
-        .notification.show {
-            display: block;
-        }
-        
-        .notification.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .notification.info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .job-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-failed {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .status-running {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background: white;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .form-group textarea {
-            resize: vertical;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <header>
         <div class="container">
-            <h1>🔒 ColdVault - Backup Dashboard</h1>
+            <h1><i class="ph ph-shield-check"></i> ColdVault</h1>
         </div>
     </header>
     
@@ -336,41 +21,146 @@
         
         <div class="stats-grid" id="stats-grid">
             <div class="stat-card">
-                <h3>Total Jobs</h3>
+                <h3><i class="ph ph-folder"></i> Total Jobs</h3>
                 <div class="value" id="stat-jobs">-</div>
             </div>
             <div class="stat-card">
-                <h3>Successful Backups</h3>
+                <h3><i class="ph ph-check-circle"></i> Successful Backups</h3>
                 <div class="value" id="stat-successful">-</div>
             </div>
             <div class="stat-card">
-                <h3>Failed Backups</h3>
+                <h3><i class="ph ph-x-circle"></i> Failed Backups</h3>
                 <div class="value" id="stat-failed">-</div>
             </div>
             <div class="stat-card">
-                <h3>Total Storage</h3>
+                <h3><i class="ph ph-hard-drives"></i> Total Storage</h3>
                 <div class="value" id="stat-storage">-</div>
             </div>
             <div class="stat-card">
-                <h3>Monthly Cost</h3>
+                <h3><i class="ph ph-currency-dollar"></i> Monthly Cost</h3>
                 <div class="value" id="stat-cost">-</div>
             </div>
         </div>
         
-        <div class="jobs-section">
-            <div class="jobs-header">
-                <h2>Backup Jobs</h2>
-                <button class="btn" onclick="showCreateJobModal()">+ New Job</button>
+        <div class="main-tabs">
+            <button class="main-tab active" onclick="switchMainTab('jobs', event)">
+                <i class="ph ph-list-bullets"></i> Backup Jobs
+            </button>
+            <button class="main-tab" onclick="switchMainTab('metrics', event)">
+                <i class="ph ph-chart-line"></i> Metrics
+            </button>
+        </div>
+        
+        <div id="main-tab-jobs" class="main-tab-content active">
+            <div class="jobs-section">
+                <div class="jobs-header">
+                    <h2><i class="ph ph-list-bullets"></i> Backup Jobs</h2>
+                    <button class="btn" onclick="showCreateJobModal()"><i class="ph ph-plus"></i> New Job</button>
+                </div>
+                <div id="jobs-list" class="loading">Loading jobs...</div>
             </div>
-            <div id="jobs-list" class="loading">Loading jobs...</div>
+        </div>
+        
+        <div id="main-tab-metrics" class="main-tab-content">
+        <div class="metrics-section">
+            <div class="metrics-header">
+                <h2><i class="ph ph-chart-line"></i> Storage & Cost Metrics</h2>
+            </div>
+            
+            <div class="metrics-tabs">
+                <button class="metrics-tab active" onclick="switchMetricsTab('overview', event)">Overview</button>
+                <button class="metrics-tab" onclick="switchMetricsTab('history', event)">History</button>
+                <button class="metrics-tab" onclick="switchMetricsTab('projection', event)">Projections</button>
+            </div>
+            
+            <div id="metrics-overview" class="metrics-content active">
+                <div id="metrics-summary" class="loading">Loading metrics...</div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Storage Usage Over Time</h3>
+                        <div class="chart-controls">
+                            <select id="storage-days" onchange="loadMetricsCharts()">
+                                <option value="7">Last 7 days</option>
+                                <option value="30" selected>Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="position: relative; height: 400px;">
+                        <canvas id="storage-chart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Cost Over Time</h3>
+                        <div class="chart-controls">
+                            <select id="cost-days" onchange="loadMetricsCharts()">
+                                <option value="7">Last 7 days</option>
+                                <option value="30" selected>Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="position: relative; height: 400px;">
+                        <canvas id="cost-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="metrics-history" class="metrics-content">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title">Storage by Storage Class</h3>
+                        <div class="chart-controls">
+                            <select id="history-days" onchange="loadHistoryChart()">
+                                <option value="7">Last 7 days</option>
+                                <option value="30" selected>Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="position: relative; height: 400px;">
+                        <canvas id="history-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="metrics-projection" class="metrics-content">
+                <div id="projection-content" class="loading">Loading projections...</div>
+            </div>
+        </div>
+        </div>
+    </div>
+    
+    <!-- Sync Results Modal -->
+    <div id="sync-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Sync Results</h2>
+                <button class="modal-close" onclick="closeSyncModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="sync-status" class="loading">Checking sync status...</div>
+                <div id="sync-issues" style="display: none;">
+                    <h3>Issues Found</h3>
+                    <div id="sync-issues-list"></div>
+                    <div class="modal-footer" style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button class="btn" onclick="closeSyncModal()">Close</button>
+                        <button class="btn btn-primary" id="sync-fix-btn" onclick="applySyncFixes()">Apply Fixes</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
     <!-- Create/Edit Job Modal -->
     <div id="create-job-modal" class="modal">
         <div class="modal-content">
-            <h2 id="job-modal-title">Create Backup Job</h2>
-            <form id="create-job-form" onsubmit="saveJob(event)">
+            <div class="modal-header">
+                <h2 id="job-modal-title">Create Backup Job</h2>
+            </div>
+            <div class="modal-body">
+                <form id="create-job-form" onsubmit="saveJob(event)">
                 <div class="form-group">
                     <label>Job Name *</label>
                     <input type="text" name="name" required>
@@ -424,412 +214,20 @@
                         Recommended for daily/weekly backups. First backup will be full, subsequent backups only include changes.
                     </small>
                 </div>
+                    <input type="hidden" name="job_id" id="job-id-field">
+                </form>
+            </div>
+            <div class="modal-footer">
                 <div class="form-actions">
-                    <button type="button" class="btn btn-danger" onclick="closeCreateJobModal()">Cancel</button>
-                    <button type="submit" class="btn btn-success" id="job-submit-btn">Create Job</button>
+                    <button type="button" class="btn btn-danger" onclick="closeCreateJobModal()"><i class="ph ph-x"></i> Cancel</button>
+                    <button type="submit" form="create-job-form" class="btn btn-success" id="job-submit-btn"><i class="ph ph-check"></i> Create Job</button>
                 </div>
-                <input type="hidden" name="job_id" id="job-id-field">
-            </form>
+            </div>
         </div>
     </div>
     
-    <script>
-        const API_BASE = '/api';
-        
-        async function fetchJSON(url) {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return await response.json();
-        }
-        
-        async function postJSON(url, data) {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || `HTTP error! status: ${response.status}`);
-            }
-            return await response.json();
-        }
-        
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `notification ${type} show`;
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 4000);
-        }
-        
-        function showError(message) {
-            showNotification(message, 'error');
-        }
-        
-        function formatStorage(bytes) {
-            if (bytes === 0) return '0 B';
-            const kb = bytes / 1024;
-            const mb = kb / 1024;
-            const gb = mb / 1024;
-            const tb = gb / 1024;
-            
-            if (tb >= 1) {
-                return `${tb.toFixed(2)} TB`;
-            } else if (gb >= 1) {
-                return `${gb.toFixed(2)} GB`;
-            } else if (mb >= 1) {
-                return `${mb.toFixed(2)} MB`;
-            } else if (kb >= 1) {
-                return `${kb.toFixed(2)} KB`;
-            } else {
-                return `${bytes} B`;
-            }
-        }
-        
-        function formatCost(cost) {
-            if (cost === 0) return '$0.00';
-            if (cost < 0.01) {
-                return `$${cost.toFixed(4)}`;
-            } else if (cost < 1) {
-                return `$${cost.toFixed(2)}`;
-            } else {
-                return `$${cost.toFixed(2)}`;
-            }
-        }
-        
-        async function loadDashboard() {
-            try {
-                const overview = await fetchJSON(`${API_BASE}/dashboard/overview`);
-                
-                document.getElementById('stat-jobs').textContent = overview.jobs.total;
-                document.getElementById('stat-successful').textContent = overview.backups.successful;
-                document.getElementById('stat-failed').textContent = overview.backups.failed;
-                document.getElementById('stat-storage').textContent = formatStorage(overview.storage.total_bytes);
-                document.getElementById('stat-cost').textContent = formatCost(overview.costs.monthly_estimate);
-            } catch (error) {
-                showError(`Failed to load dashboard: ${error.message}`);
-            }
-        }
-        
-        // Track which job logs are expanded
-        const expandedLogs = new Set();
-        
-        async function loadJobs() {
-            try {
-                const jobs = await fetchJSON(`${API_BASE}/jobs/`);
-                const jobsList = document.getElementById('jobs-list');
-                
-                if (jobs.length === 0) {
-                    jobsList.innerHTML = '<p>No jobs configured. Create your first backup job!</p>';
-                    return;
-                }
-                
-                jobsList.innerHTML = jobs.map(job => {
-                    const isRunning = job.last_run_status === 'running';
-                    const wasExpanded = expandedLogs.has(job.id);
-                    const shouldAutoExpand = isRunning && !wasExpanded; // Auto-expand if running and not already manually expanded
-                    
-                    if (shouldAutoExpand) {
-                        expandedLogs.add(job.id);
-                    }
-                    
-                    return `
-                    <div class="job-item" id="job-${job.id}">
-                        <div class="job-header">
-                            <div class="job-info">
-                                <h4>${job.name}</h4>
-                                <div class="meta">
-                                    Type: ${job.job_type} | 
-                                    Schedule: ${job.schedule} | 
-                                    Last run: ${job.last_run_at ? new Date(job.last_run_at).toLocaleString() : 'Never'} |
-                                    Next run: ${job.next_run_at ? new Date(job.next_run_at).toLocaleString() : 'N/A'}
-                                </div>
-                            </div>
-                            <div class="job-actions">
-                                <span class="status-badge status-${job.last_run_status ? job.last_run_status.toLowerCase() : 'pending'}">
-                                    ${job.last_run_status || 'Pending'}
-                                </span>
-                                ${isRunning ? 
-                                    `<button class="btn btn-danger" onclick="cancelBackup(${job.id})">Cancel</button>` :
-                                    `<button class="btn" onclick="triggerBackup(${job.id})">Run Now</button>`
-                                }
-                                <button class="btn" onclick="editJob(${job.id})" style="background: #f39c12;">Edit</button>
-                                <button class="btn btn-danger" onclick="deleteJob(${job.id})">Delete</button>
-                            </div>
-                        </div>
-                        <div class="log-toggle ${wasExpanded || shouldAutoExpand ? 'expanded' : ''}" onclick="toggleJobLogs(${job.id})" id="log-toggle-${job.id}">
-                            ${wasExpanded || shouldAutoExpand ? 'Hide Logs' : 'View Logs'}
-                        </div>
-                        <div class="job-logs ${wasExpanded || shouldAutoExpand ? 'expanded' : ''}" id="job-logs-${job.id}">
-                            <div class="log-content-inline" id="log-content-${job.id}">Loading logs...</div>
-                        </div>
-                    </div>
-                `;
-                }).join('');
-                
-                // Load logs for expanded jobs
-                jobs.forEach(job => {
-                    const logsDiv = document.getElementById(`job-logs-${job.id}`);
-                    const isExpanded = logsDiv && logsDiv.classList.contains('expanded');
-                    
-                    if (isExpanded) {
-                        const isRunning = job.last_run_status === 'running';
-                        loadJobLogs(job.id, isRunning);
-                    } else if (job.last_run_status !== 'running') {
-                        // Stop auto-refresh if job is no longer running and logs aren't expanded
-                        if (window.logRefreshIntervals && window.logRefreshIntervals[job.id]) {
-                            clearInterval(window.logRefreshIntervals[job.id]);
-                            delete window.logRefreshIntervals[job.id];
-                        }
-                    }
-                });
-            } catch (error) {
-                document.getElementById('jobs-list').innerHTML = `<div class="error">Failed to load jobs: ${error.message}</div>`;
-            }
-        }
-        
-        async function triggerBackup(jobId) {
-            try {
-                const result = await postJSON(`${API_BASE}/backups/${jobId}/run`, {});
-                showNotification(`Backup triggered! Run ID: ${result.backup_run_id}`, 'info');
-                // Mark logs as expanded so they stay open after refresh
-                expandedLogs.add(jobId);
-                loadJobs();
-            } catch (error) {
-                showError(`Failed to trigger backup: ${error.message}`);
-            }
-        }
-        
-        async function cancelBackup(jobId) {
-            try {
-                // First, get the current backup run
-                const runs = await fetchJSON(`${API_BASE}/backups/runs?job_id=${jobId}&limit=1`);
-                if (runs.length === 0) {
-                    showError('No backup runs found for this job');
-                    loadJobs();
-                    return;
-                }
-                
-                const run = runs[0];
-                if (run.status !== 'running' && run.status !== 'pending') {
-                    showError(`Cannot cancel backup with status: ${run.status}`);
-                    loadJobs();
-                    return;
-                }
-                
-                const runId = run.id;
-                const result = await postJSON(`${API_BASE}/backups/runs/${runId}/cancel`, {});
-                showNotification(result.message || `Backup cancellation requested`, 'info');
-                loadJobs();
-            } catch (error) {
-                showError(`Failed to cancel backup: ${error.message}`);
-                loadJobs(); // Refresh anyway to update status
-            }
-        }
-        
-        function toggleJobLogs(jobId) {
-            const logsDiv = document.getElementById(`job-logs-${jobId}`);
-            const toggle = document.getElementById(`log-toggle-${jobId}`);
-            
-            if (logsDiv.classList.contains('expanded')) {
-                logsDiv.classList.remove('expanded');
-                toggle.classList.remove('expanded');
-                toggle.textContent = 'View Logs';
-                expandedLogs.delete(jobId);
-                // Stop auto-refresh
-                if (window.logRefreshIntervals && window.logRefreshIntervals[jobId]) {
-                    clearInterval(window.logRefreshIntervals[jobId]);
-                    delete window.logRefreshIntervals[jobId];
-                }
-            } else {
-                logsDiv.classList.add('expanded');
-                toggle.classList.add('expanded');
-                toggle.textContent = 'Hide Logs';
-                expandedLogs.add(jobId);
-                // Load logs and start auto-refresh if running
-                const job = Array.from(document.querySelectorAll('.job-item')).find(el => el.id === `job-${jobId}`);
-                const statusBadge = job?.querySelector('.status-badge');
-                const isRunning = statusBadge?.textContent.trim() === 'running';
-                loadJobLogs(jobId, isRunning);
-            }
-        }
-        
-        async function loadJobLogs(jobId, autoRefresh = false) {
-            try {
-                const runs = await fetchJSON(`${API_BASE}/backups/runs?job_id=${jobId}&limit=1`);
-                const logContent = document.getElementById(`log-content-${jobId}`);
-                
-                if (runs.length === 0) {
-                    logContent.textContent = 'No backup runs found for this job.';
-                    return;
-                }
-                
-                const run = runs[0];
-                const logData = await fetchJSON(`${API_BASE}/backups/runs/${run.id}/log?tail=500`);
-                
-                if (logData.log) {
-                    logContent.textContent = logData.log;
-                    // Auto-scroll to bottom
-                    logContent.scrollTop = logContent.scrollHeight;
-                } else {
-                    logContent.textContent = 'No log available for this backup run.';
-                }
-                
-                // Set up auto-refresh if requested and job is running
-                if (autoRefresh && run.status === 'running') {
-                    // Clear existing interval for this job
-                    if (window.logRefreshIntervals && window.logRefreshIntervals[jobId]) {
-                        clearInterval(window.logRefreshIntervals[jobId]);
-                    }
-                    
-                    // Initialize intervals object if needed
-                    if (!window.logRefreshIntervals) {
-                        window.logRefreshIntervals = {};
-                    }
-                    
-                    // Refresh every 2 seconds
-                    window.logRefreshIntervals[jobId] = setInterval(() => {
-                        loadJobLogs(jobId, false); // Don't create nested intervals
-                    }, 2000);
-                } else if (run.status !== 'running') {
-                    // Stop auto-refresh if job is no longer running
-                    if (window.logRefreshIntervals && window.logRefreshIntervals[jobId]) {
-                        clearInterval(window.logRefreshIntervals[jobId]);
-                        delete window.logRefreshIntervals[jobId];
-                    }
-                }
-            } catch (error) {
-                const logContent = document.getElementById(`log-content-${jobId}`);
-                logContent.textContent = `Error loading logs: ${error.message}`;
-            }
-        }
-        
-        let editingJobId = null;
-        
-        function showCreateJobModal() {
-            editingJobId = null;
-            document.getElementById('job-modal-title').textContent = 'Create Backup Job';
-            document.getElementById('job-submit-btn').textContent = 'Create Job';
-            document.getElementById('job-id-field').value = '';
-            document.getElementById('create-job-form').reset();
-            document.getElementById('create-job-modal').style.display = 'block';
-        }
-        
-        async function editJob(jobId) {
-            try {
-                const job = await fetchJSON(`${API_BASE}/jobs/${jobId}`);
-                editingJobId = jobId;
-                
-                document.getElementById('job-modal-title').textContent = 'Edit Backup Job';
-                document.getElementById('job-submit-btn').textContent = 'Update Job';
-                document.getElementById('job-id-field').value = jobId;
-                
-                const form = document.getElementById('create-job-form');
-                form.name.value = job.name;
-                form.job_type.value = job.job_type;
-                form.description.value = job.description || '';
-                form.source_paths.value = job.source_paths.join('\n');
-                form.schedule.value = job.schedule;
-                form.s3_bucket.value = job.s3_bucket;
-                form.s3_prefix.value = job.s3_prefix;
-                form.storage_class.value = job.storage_class;
-                form.incremental_enabled.checked = job.incremental_enabled;
-                
-                document.getElementById('create-job-modal').style.display = 'block';
-            } catch (error) {
-                showError(`Failed to load job: ${error.message}`);
-            }
-        }
-        
-        function closeCreateJobModal() {
-            document.getElementById('create-job-modal').style.display = 'none';
-            document.getElementById('create-job-form').reset();
-            editingJobId = null;
-        }
-        
-        async function saveJob(event) {
-            event.preventDefault();
-            const form = event.target;
-            const formData = new FormData(form);
-            
-            const jobData = {
-                name: formData.get('name'),
-                job_type: formData.get('job_type'),
-                description: formData.get('description') || null,
-                source_paths: formData.get('source_paths').split('\n').filter(p => p.trim()),
-                schedule: formData.get('schedule'),
-                s3_bucket: formData.get('s3_bucket'),
-                s3_prefix: formData.get('s3_prefix'),
-                storage_class: formData.get('storage_class'),
-                incremental_enabled: formData.get('incremental_enabled') === 'on',
-                enabled: true
-            };
-            
-            try {
-                if (editingJobId) {
-                    // Update existing job
-                    const response = await fetch(`${API_BASE}/jobs/${editingJobId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(jobData)
-                    });
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail || `HTTP error! status: ${response.status}`);
-                    }
-                    showNotification('Job updated successfully!', 'info');
-                } else {
-                    // Create new job
-                    await postJSON(`${API_BASE}/jobs/`, jobData);
-                    showNotification('Job created successfully!', 'info');
-                }
-                closeCreateJobModal();
-                loadJobs();
-                loadDashboard();
-            } catch (error) {
-                showError(`Failed to ${editingJobId ? 'update' : 'create'} job: ${error.message}`);
-            }
-        }
-        
-        async function deleteJob(jobId) {
-            try {
-                await fetch(`${API_BASE}/jobs/${jobId}`, {
-                    method: 'DELETE'
-                });
-                showNotification('Job deleted successfully!', 'info');
-                expandedLogs.delete(jobId);
-                loadJobs();
-                loadDashboard();
-            } catch (error) {
-                showError(`Failed to delete job: ${error.message}`);
-            }
-        }
-        
-        // Close modal on outside click
-        window.onclick = function(event) {
-            const createModal = document.getElementById('create-job-modal');
-            if (event.target === createModal) {
-                closeCreateJobModal();
-            }
-        }
-        
-        // Initial load
-        loadDashboard();
-        loadJobs();
-        
-        // Refresh dashboard and jobs every 10 seconds (more frequent for better UX)
-        setInterval(() => {
-            loadDashboard();
-            loadJobs();
-        }, 10000);
-    </script>
+    
+
+    <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

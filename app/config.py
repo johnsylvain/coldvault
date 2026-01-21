@@ -49,5 +49,9 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+    
+    # Performance settings
+    backup_scan_threads: int = 4  # Number of threads for file scanning (default: 4)
+    backup_upload_threads: int = 4  # Number of threads for S3 uploads (default: 4)
 
 settings = Settings()

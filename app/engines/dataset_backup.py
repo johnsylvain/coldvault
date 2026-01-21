@@ -33,9 +33,12 @@ class DatasetBackupEngine:
                     raise InterruptedError("Backup cancelled by user")
         
         source_paths = json.loads(job.source_paths)
+        # Generate snapshot_id with timestamp for database tracking/logging
+        # Note: S3 key will be consistent (no timestamp) for consolidated backup strategy
         snapshot_id = f"{job.name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         
-        backup_logger.info(f"Creating snapshot: {snapshot_id}")
+        backup_logger.info(f"Creating backup snapshot: {snapshot_id}")
+        backup_logger.info(f"Backup will overwrite previous backup at: s3://{job.s3_bucket}/{job.s3_prefix}/{job.name}.tar.gz")
         
         # Create temporary directory for backup
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -149,8 +152,10 @@ class DatasetBackupEngine:
                 check_cancellation()  # Check after encryption
             
             # Upload to S3
+            # Use consistent S3 key (without timestamp) for consolidated backup strategy
+            # This overwrites the previous backup, suitable for 3-2-1 backup strategy
             check_cancellation()  # Check before upload
-            s3_key = f"{job.s3_prefix}/{snapshot_id}.tar.gz"
+            s3_key = f"{job.s3_prefix}/{job.name}.tar.gz"
             if job.encryption_enabled:
                 s3_key += ".encrypted"
             

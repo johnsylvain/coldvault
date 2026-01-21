@@ -150,8 +150,10 @@ class IncrementalBackupEngine:
             for file in files:
                 all_files.append(os.path.join(root, file))
         
-        # Scan files in parallel
-        max_workers = min(8, len(all_files))  # Use up to 8 threads
+        # Scan files in parallel (use configurable limit, but don't exceed file count)
+        max_scan_threads = settings.backup_scan_threads
+        max_workers = min(max_scan_threads, len(all_files))
+        backup_logger.info(f"Scanning with {max_workers} thread(s)")
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_file = {
                 executor.submit(self.scan_file, file_path, source_path, job, previous_files): file_path
@@ -232,9 +234,12 @@ class IncrementalBackupEngine:
                     raise InterruptedError("Backup cancelled by user")
         
         source_paths = json.loads(job.source_paths)
+        # Generate snapshot_id with timestamp for database tracking/logging
+        # Note: S3 paths will be consistent (no timestamp) for consolidated backup strategy
         snapshot_id = f"{job.name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         
-        backup_logger.info(f"Creating incremental snapshot: {snapshot_id}")
+        backup_logger.info(f"Creating incremental backup snapshot: {snapshot_id}")
+        backup_logger.info(f"Backup will overwrite previous backup at: s3://{job.s3_bucket}/{job.s3_prefix}/{job.name}/")
         backup_logger.info("Loading previous backup manifest for comparison...")
         
         # Load previous manifest to compare against
@@ -327,14 +332,18 @@ class IncrementalBackupEngine:
                 continue
             
             # Create S3 key preserving directory structure
-            s3_key = f"{job.s3_prefix}/{snapshot_id}/{rel_path}"
+            # Use consistent S3 key (without timestamp) for consolidated backup strategy
+            # This overwrites the previous backup, suitable for 3-2-1 backup strategy
+            s3_key = f"{job.s3_prefix}/{job.name}/{rel_path}"
             # Normalize path separators for S3
             s3_key = s3_key.replace('\\', '/')
             
             upload_tasks.append((full_path, s3_key, rel_path, signature))
         
-        # Upload files in parallel
-        max_upload_workers = min(10, len(upload_tasks))  # Use up to 10 threads for uploads
+        # Upload files in parallel (use configurable limit, but don't exceed task count)
+        max_upload_threads = settings.backup_upload_threads
+        max_upload_workers = min(max_upload_threads, len(upload_tasks))
+        backup_logger.info(f"Uploading with {max_upload_workers} thread(s)")
         with ThreadPoolExecutor(max_workers=max_upload_workers) as executor:
             future_to_task = {
                 executor.submit(
@@ -407,7 +416,8 @@ class IncrementalBackupEngine:
             json.dump(manifest_data, f, indent=2)
         
         # Upload manifest (encrypt if needed, but keep original key name)
-        manifest_key = f"{job.s3_prefix}/{snapshot_id}.manifest.json"
+        # Use consistent manifest key (without timestamp) for consolidated backup strategy
+        manifest_key = f"{job.s3_prefix}/{job.name}.manifest.json"
         if job.encryption_enabled:
             # Encrypt manifest to temp file
             encrypted_manifest = manifest_file + ".encrypted"
@@ -429,7 +439,7 @@ class IncrementalBackupEngine:
             "snapshot_id": snapshot_id,
             "size_bytes": total_new_size,
             "files_count": len(uploaded_files),
-            "s3_key": f"{job.s3_prefix}/{snapshot_id}/",  # Directory prefix for this snapshot
+            "s3_key": f"{job.s3_prefix}/{job.name}/",  # Directory prefix (consistent, no timestamp)
             "manifest_key": manifest_key,
             "incremental": True,
             "files_unchanged": total_files_unchanged,

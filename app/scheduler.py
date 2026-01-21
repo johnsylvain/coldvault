@@ -25,6 +25,15 @@ class JobScheduler:
         
         # Load existing jobs
         self._load_jobs()
+        
+        # Schedule daily metrics recording (runs at midnight UTC)
+        self.scheduler.add_job(
+            self._record_daily_metrics,
+            trigger=CronTrigger(hour=0, minute=0),
+            id="daily_metrics",
+            replace_existing=True
+        )
+        logger.info("Scheduled daily metrics recording at midnight UTC")
     
     def stop(self):
         """Stop the scheduler"""
@@ -148,6 +157,21 @@ class JobScheduler:
             backup_worker.execute_backup(job_id, None)
         except Exception as e:
             logger.error(f"Error triggering backup for job {job_id}: {e}")
+    
+    def _record_daily_metrics(self):
+        """Record daily storage metrics"""
+        try:
+            from app.metrics import metrics_service
+            from app.database import SessionLocal
+            
+            db = SessionLocal()
+            try:
+                metrics_service.record_daily_metrics(db)
+                logger.info("Daily metrics recorded successfully")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error recording daily metrics: {e}", exc_info=True)
     
     def get_next_run_time(self, job_id: int) -> datetime | None:
         """Get next scheduled run time for a job"""
