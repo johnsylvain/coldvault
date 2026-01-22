@@ -170,11 +170,11 @@ class StorageMetrics(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
     
     # Total storage by class (bytes)
-    total_size_bytes = Column(Integer, default=0)
-    size_standard_bytes = Column(Integer, default=0)
-    size_glacier_ir_bytes = Column(Integer, default=0)
-    size_glacier_flexible_bytes = Column(Integer, default=0)
-    size_deep_archive_bytes = Column(Integer, default=0)
+    total_size_bytes = Column(BigInteger, default=0)  # Changed from Integer to support large backups (>2GB)
+    size_standard_bytes = Column(BigInteger, default=0)
+    size_glacier_ir_bytes = Column(BigInteger, default=0)
+    size_glacier_flexible_bytes = Column(BigInteger, default=0)
+    size_deep_archive_bytes = Column(BigInteger, default=0)
     
     # Total files
     total_files = Column(Integer, default=0)

@@ -51,6 +51,37 @@ def fix_database_schema():
             """))
             logger.info("✓ Fixed snapshots.size_bytes")
             
+            # Alter storage_metrics size columns
+            conn.execute(text("""
+                ALTER TABLE storage_metrics 
+                ALTER COLUMN total_size_bytes TYPE BIGINT;
+            """))
+            logger.info("✓ Fixed storage_metrics.total_size_bytes")
+            
+            conn.execute(text("""
+                ALTER TABLE storage_metrics 
+                ALTER COLUMN size_standard_bytes TYPE BIGINT;
+            """))
+            logger.info("✓ Fixed storage_metrics.size_standard_bytes")
+            
+            conn.execute(text("""
+                ALTER TABLE storage_metrics 
+                ALTER COLUMN size_glacier_ir_bytes TYPE BIGINT;
+            """))
+            logger.info("✓ Fixed storage_metrics.size_glacier_ir_bytes")
+            
+            conn.execute(text("""
+                ALTER TABLE storage_metrics 
+                ALTER COLUMN size_glacier_flexible_bytes TYPE BIGINT;
+            """))
+            logger.info("✓ Fixed storage_metrics.size_glacier_flexible_bytes")
+            
+            conn.execute(text("""
+                ALTER TABLE storage_metrics 
+                ALTER COLUMN size_deep_archive_bytes TYPE BIGINT;
+            """))
+            logger.info("✓ Fixed storage_metrics.size_deep_archive_bytes")
+            
             logger.info("Database schema fixed successfully!")
         except Exception as e:
             logger.error(f"Error fixing schema: {e}")

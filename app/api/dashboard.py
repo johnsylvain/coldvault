@@ -155,14 +155,15 @@ def estimate_costs(db: Session) -> Dict[str, Any]:
         total = db.query(func.sum(Snapshot.size_bytes)).filter(
             Snapshot.storage_class == storage_class
         ).scalar() or 0
-        size_by_class[storage_class.value] = total / (1024**3)  # Convert to GB
+        # Convert to float to avoid Decimal issues
+        size_by_class[storage_class.value] = float(total) / (1024**3)  # Convert to GB
     
     # Calculate costs
-    monthly_cost = 0
+    monthly_cost = 0.0
     cost_breakdown = {}
     for storage_class, price_per_gb in pricing.items():
-        gb = size_by_class.get(storage_class.value, 0)
-        cost = gb * price_per_gb
+        gb = size_by_class.get(storage_class.value, 0.0)
+        cost = float(gb) * float(price_per_gb)  # Ensure both are floats
         monthly_cost += cost
         cost_breakdown[storage_class.value] = {
             "size_gb": round(gb, 2),

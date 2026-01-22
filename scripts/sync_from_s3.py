@@ -94,12 +94,24 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
         
         logger.info(f"Found {len(files)} files in S3")
         
-        # Calculate total size
-        total_size = sum(size for size in files.values())
-        total_files = len([k for k in files.keys() if not k.endswith('.manifest.json')])
+        # Calculate total size (exclude manifest and other metadata files)
+        # Only count actual backup files
+        total_size = 0
+        total_files = 0
+        manifest_size = 0
         
-        logger.info(f"Total size: {total_size / (1024**3):.2f} GB")
-        logger.info(f"Total files: {total_files:,}")
+        for key, size in files.items():
+            if key.endswith('.manifest.json'):
+                manifest_size += size
+                logger.info(f"Found manifest: {key} ({size / (1024**2):.2f} MB)")
+            else:
+                total_size += size
+                total_files += 1
+        
+        logger.info(f"Backup files: {total_files:,} files, {total_size / (1024**3):.2f} GB")
+        if manifest_size > 0:
+            logger.info(f"Manifest size: {manifest_size / (1024**2):.2f} MB (excluded from backup size)")
+        logger.info(f"Total in S3 (including manifest): {(total_size + manifest_size) / (1024**3):.2f} GB")
         
         # Store for later use
         use_file_scan = True
