@@ -14,3 +14,11 @@ cache/
 data/
 .DS_Store
 *.log
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.pytest_cache/
+.tox/
