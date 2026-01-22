@@ -11,6 +11,35 @@ from app.database import get_db, Job, BackupRun, Snapshot, BackupStatus, Storage
 
 router = APIRouter()
 
+def calculate_projected_completion(job_id: int, current_run_id: int, db: Session) -> str | None:
+    """Calculate projected completion time for a running backup based on historical data"""
+    # Get current running backup run
+    current_run = db.query(BackupRun).filter(BackupRun.id == current_run_id).first()
+    if not current_run or not current_run.started_at:
+        return None
+    
+    # Get average duration from successful historical runs (last 10, excluding current)
+    historical_runs = db.query(BackupRun).filter(
+        BackupRun.job_id == job_id,
+        BackupRun.status == BackupStatus.SUCCESS,
+        BackupRun.duration_seconds.isnot(None),
+        BackupRun.id != current_run_id
+    ).order_by(BackupRun.started_at.desc()).limit(10).all()
+    
+    if historical_runs:
+        avg_duration = sum(r.duration_seconds for r in historical_runs) / len(historical_runs)
+        projected_completion_at = current_run.started_at.replace(tzinfo=None) + timedelta(seconds=avg_duration)
+        return projected_completion_at.isoformat()
+    else:
+        # If no historical data, estimate based on elapsed time (assume 50% progress)
+        elapsed = (datetime.utcnow() - current_run.started_at).total_seconds()
+        if elapsed > 0:
+            projected_completion = elapsed * 2
+            projected_completion_at = current_run.started_at.replace(tzinfo=None) + timedelta(seconds=projected_completion)
+            return projected_completion_at.isoformat()
+    
+    return None
+
 @router.get("/overview")
 def get_overview(db: Session = Depends(get_db)):
     """Get dashboard overview statistics"""
@@ -56,7 +85,9 @@ def get_overview(db: Session = Depends(get_db)):
                 "job_id": run.job_id,
                 "status": run.status.value if run.status else None,
                 "started_at": run.started_at.isoformat() if run.started_at else None,
-                "duration_seconds": run.duration_seconds
+                "duration_seconds": run.duration_seconds,
+                "elapsed_seconds": (datetime.utcnow() - run.started_at).total_seconds() if run.status == BackupStatus.RUNNING and run.started_at else None,
+                "projected_completion_at": calculate_projected_completion(run.job_id, run.id, db) if run.status == BackupStatus.RUNNING else None
             }
             for run in recent_runs
         ]

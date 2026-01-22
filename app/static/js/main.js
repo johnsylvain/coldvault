@@ -27,6 +27,29 @@ document.addEventListener('DOMContentLoaded', () => {
             loadJobs();
         }
     }, 10000);
+    
+    // Update runtime displays every second for running jobs
+    setInterval(() => {
+        // This will be handled by updateRunningJobRuntimes which sets up per-job intervals
+        // But we can also refresh the dashboard activity if on dashboard page
+        const currentPath = router.getCurrentRoute();
+        if (currentPath === '/dashboard' || currentPath === '/') {
+            // Refresh activity display for running jobs
+            const activityItems = document.querySelectorAll('.activity-item');
+            activityItems.forEach(item => {
+                const statusIcon = item.querySelector('.activity-status i');
+                if (statusIcon && statusIcon.className.includes('ph-circle-notch')) {
+                    // This is a running job, update its display
+                    const meta = item.querySelector('.activity-meta');
+                    if (meta) {
+                        const text = meta.textContent;
+                        // Extract start time from the text and recalculate
+                        // For now, we'll rely on the 10-second refresh for activity
+                    }
+                }
+            });
+        }
+    }, 1000);
 });
 
 function setupRoutes() {
@@ -69,6 +92,13 @@ function setupRoutes() {
         showTab('metrics');
         updateNavActive('metrics');
         showMetricsTab('projection');
+    });
+
+    // Restore route
+    router.register('/restore', () => {
+        showTab('restore');
+        updateNavActive('restore');
+        loadRestorePage();
     });
 }
 
@@ -140,6 +170,12 @@ function updateNavActive(activeTab) {
                 metricsItem.classList.add('expanded');
             }
         }
+    } else if (activeTab === 'restore') {
+        const restoreItem = Array.from(document.querySelectorAll('.nav-item')).find(item => {
+            const icon = item.querySelector('i');
+            return icon && icon.className.includes('ph-arrow-counter-clockwise');
+        });
+        if (restoreItem) restoreItem.classList.add('active');
     }
 }
 
@@ -211,7 +247,19 @@ async function loadRecentActivity(activities) {
         const status = activity.status || 'unknown';
         const statusClass = status.toLowerCase();
         const startedAt = activity.started_at ? new Date(activity.started_at) : null;
-        const duration = activity.duration_seconds ? formatDuration(activity.duration_seconds) : 'N/A';
+        
+        let durationText = 'N/A';
+        if (status === 'running' && activity.elapsed_seconds !== null && activity.elapsed_seconds !== undefined) {
+            // Show elapsed time for running jobs
+            durationText = formatDuration(activity.elapsed_seconds);
+            if (activity.projected_completion_at) {
+                const projectedAt = new Date(activity.projected_completion_at);
+                const timeUntil = Math.max(0, Math.round((projectedAt - new Date()) / 1000));
+                durationText += ` (est. ${formatDuration(timeUntil)} remaining)`;
+            }
+        } else if (activity.duration_seconds) {
+            durationText = formatDuration(activity.duration_seconds);
+        }
         
         const statusIcon = status === 'success' ? 'ph-check-circle' :
                           status === 'failed' ? 'ph-x-circle' :
@@ -226,7 +274,7 @@ async function loadRecentActivity(activities) {
                 <div class="activity-content">
                     <div class="activity-title">${jobName}</div>
                     <div class="activity-meta">
-                        ${startedAt ? startedAt.toLocaleString() : 'Unknown time'} • ${duration}
+                        ${startedAt ? startedAt.toLocaleString() : 'Unknown time'} • ${durationText}
                     </div>
                 </div>
             </div>
@@ -349,13 +397,20 @@ window.logRefreshIntervals = {};
 async function loadJobs() {
     try {
         const jobs = await api.getJobs();
+        console.log('loadJobs: Fetched jobs from API:', jobs.length, jobs);
         const jobsList = document.getElementById('jobs-list');
+        
+        if (!jobsList) {
+            console.error('loadJobs: jobs-list element not found!');
+            return;
+        }
         
         if (jobs.length === 0) {
             jobsList.innerHTML = '<p>No jobs configured. Create your first backup job!</p>';
             return;
         }
         
+        console.log('loadJobs: Rendering', jobs.length, 'jobs');
         jobsList.innerHTML = jobs.map(job => {
             const isRunning = job.last_run_status === 'running';
             const wasExpanded = expandedLogs.has(job.id);
@@ -371,6 +426,23 @@ async function loadJobs() {
                                   '<i class="ph ph-clock"></i>';
             const statusText = job.last_run_status || 'Pending';
             const statusClass = job.last_run_status ? job.last_run_status.toLowerCase() : 'pending';
+            
+            // Build runtime display for running jobs
+            let runtimeDisplay = '';
+            if (isRunning && job.current_run_elapsed_seconds !== null && job.current_run_elapsed_seconds !== undefined) {
+                runtimeDisplay = `<span class="job-meta-item">
+                    <i class="ph ph-timer"></i>
+                    <span>Running: ${formatDuration(job.current_run_elapsed_seconds)}</span>
+                </span>`;
+                if (job.projected_completion_at) {
+                    const projectedAt = new Date(job.projected_completion_at);
+                    const timeUntil = Math.max(0, Math.round((projectedAt - new Date()) / 1000));
+                    runtimeDisplay += `<span class="job-meta-item">
+                        <i class="ph ph-hourglass"></i>
+                        <span>Est. ${formatDuration(timeUntil)} remaining</span>
+                    </span>`;
+                }
+            }
             
             return `
                 <div class="job-item" id="job-${job.id}">
@@ -391,7 +463,8 @@ async function loadJobs() {
                                     <i class="ph ph-clock-clockwise"></i>
                                     <span>${job.schedule}</span>
                                 </span>
-                                ${job.last_run_at ? `
+                                ${runtimeDisplay}
+                                ${job.last_run_at && !isRunning ? `
                                 <span class="job-meta-item">
                                     <i class="ph ph-calendar"></i>
                                     <span>${new Date(job.last_run_at).toLocaleString()}</span>
@@ -453,8 +526,81 @@ async function loadJobs() {
                 }
             }
         });
+        
+        // Set up real-time runtime updates for running jobs
+        updateRunningJobRuntimes(jobs);
     } catch (error) {
         document.getElementById('jobs-list').innerHTML = `<div class="error">Failed to load jobs: ${error.message}</div>`;
+    }
+}
+
+function updateRunningJobRuntimes(jobs) {
+    // Clear existing runtime update intervals
+    if (window.runtimeUpdateIntervals) {
+        Object.values(window.runtimeUpdateIntervals).forEach(interval => clearInterval(interval));
+    }
+    window.runtimeUpdateIntervals = {};
+    
+    // Set up intervals for running jobs
+    jobs.forEach(job => {
+        if (job.last_run_status === 'running' && job.current_run_started_at) {
+            const startTime = new Date(job.current_run_started_at);
+            const projectedCompletion = job.projected_completion_at ? new Date(job.projected_completion_at) : null;
+            
+            // Update immediately
+            updateJobRuntimeDisplay(job.id, startTime, projectedCompletion);
+            
+            // Update every second
+            window.runtimeUpdateIntervals[job.id] = setInterval(() => {
+                updateJobRuntimeDisplay(job.id, startTime, projectedCompletion);
+            }, 1000);
+        }
+    });
+}
+
+function updateJobRuntimeDisplay(jobId, startTime, projectedCompletion) {
+    const jobItem = document.getElementById(`job-${jobId}`);
+    if (!jobItem) return;
+    
+    const now = new Date();
+    const elapsed = Math.floor((now - startTime) / 1000);
+    
+    // Find and update runtime display
+    const metaContainer = jobItem.querySelector('.job-info .meta');
+    if (!metaContainer) return;
+    
+    // Remove existing runtime displays
+    const existingRuntimeDisplays = metaContainer.querySelectorAll('.runtime-display');
+    existingRuntimeDisplays.forEach(el => el.remove());
+    
+    // Create new runtime display
+    const runtimeItem = document.createElement('span');
+    runtimeItem.className = 'job-meta-item runtime-display';
+    runtimeItem.innerHTML = `<i class="ph ph-timer"></i><span>Running: ${formatDuration(elapsed)}</span>`;
+    
+    // Insert after schedule item
+    const scheduleItem = Array.from(metaContainer.children).find(item => {
+        const icon = item.querySelector('i');
+        return icon && icon.className.includes('ph-clock-clockwise');
+    });
+    if (scheduleItem) {
+        // Insert after schedule item
+        if (scheduleItem.nextSibling) {
+            metaContainer.insertBefore(runtimeItem, scheduleItem.nextSibling);
+        } else {
+            metaContainer.appendChild(runtimeItem);
+        }
+    } else {
+        metaContainer.appendChild(runtimeItem);
+    }
+    
+    // Add projected completion if available
+    if (projectedCompletion) {
+        const timeUntil = Math.max(0, Math.floor((projectedCompletion - now) / 1000));
+        const projectedItem = document.createElement('span');
+        projectedItem.className = 'job-meta-item runtime-display';
+        projectedItem.innerHTML = `<i class="ph ph-hourglass"></i><span>Est. ${formatDuration(timeUntil)} remaining</span>`;
+        metaContainer.appendChild(projectedItem);
     }
 }
 
@@ -567,12 +713,21 @@ window.toggleJobLogs = (jobId) => {
 let editingJobId = null;
 
 window.showCreateJobModal = () => {
+    console.log('showCreateJobModal: Clearing editing state');
     editingJobId = null;
+    const jobIdField = document.getElementById('job-id-field');
+    if (jobIdField) {
+        jobIdField.value = '';
+    }
     document.getElementById('job-modal-title').textContent = 'Create Backup Job';
     document.getElementById('job-submit-btn').innerHTML = '<i class="ph ph-check"></i> Create Job';
-    document.getElementById('job-id-field').value = '';
     document.getElementById('create-job-form').reset();
+    // Ensure the hidden field is cleared after reset
+    if (jobIdField) {
+        jobIdField.value = '';
+    }
     document.getElementById('create-job-modal').style.display = 'block';
+    console.log('showCreateJobModal: editingJobId cleared, modal opened');
 };
 
 window.editJob = async (jobId) => {
@@ -612,6 +767,13 @@ window.saveJob = async (event) => {
     const form = event.target;
     const formData = new FormData(form);
     
+    // Get the job ID from the hidden field (if editing)
+    const jobIdField = document.getElementById('job-id-field');
+    const currentEditingJobId = jobIdField ? parseInt(jobIdField.value) || null : null;
+    
+    console.log('saveJob: editingJobId variable:', editingJobId);
+    console.log('saveJob: job-id-field value:', currentEditingJobId);
+    
     const jobData = {
         name: formData.get('name'),
         job_type: formData.get('job_type'),
@@ -626,18 +788,36 @@ window.saveJob = async (event) => {
     };
     
     try {
-        if (editingJobId) {
-            await api.updateJob(editingJobId, jobData);
+        let result;
+        // Use the field value as the source of truth, but also check the variable
+        const isEditing = currentEditingJobId || editingJobId;
+        
+        if (isEditing) {
+            const jobIdToUpdate = currentEditingJobId || editingJobId;
+            console.log('saveJob: Updating job', jobIdToUpdate);
+            result = await api.updateJob(jobIdToUpdate, jobData);
             showNotification('Job updated successfully!', 'info');
         } else {
-            await api.createJob(jobData);
+            console.log('saveJob: Creating new job', jobData.name);
+            result = await api.createJob(jobData);
+            console.log('saveJob: Created job result:', result);
             showNotification('Job created successfully!', 'info');
         }
+        
+        // Always clear editing state after save
+        editingJobId = null;
+        if (jobIdField) {
+            jobIdField.value = '';
+        }
+        
         closeCreateJobModal();
-        loadJobs();
-        loadDashboard();
+        console.log('saveJob: Reloading jobs list...');
+        await loadJobs();
+        await loadDashboard();
+        console.log('saveJob: Jobs list reloaded');
     } catch (error) {
-        showError(`Failed to ${editingJobId ? 'update' : 'create'} job: ${error.message}`);
+        console.error('saveJob: Error:', error);
+        showError(`Failed to ${(currentEditingJobId || editingJobId) ? 'update' : 'create'} job: ${error.message}`);
     }
 };
 
@@ -808,6 +988,8 @@ window.switchMainTab = (tab, event) => {
         router.navigate('/jobs');
     } else if (tab === 'metrics') {
         router.navigate('/metrics/overview');
+    } else if (tab === 'restore') {
+        router.navigate('/restore');
     }
 };
 
@@ -1105,6 +1287,163 @@ async function loadProjections() {
         container.innerHTML = `<div class="error">Failed to load projections: ${error.message}</div>`;
     }
 }
+
+// Restore page functions
+async function loadRestorePage() {
+    await loadRestoreJobs();
+}
+
+async function loadRestoreJobs() {
+    try {
+        const jobs = await api.getJobs();
+        const jobSelect = document.getElementById('restore-job-select');
+        if (!jobSelect) return;
+        
+        jobSelect.innerHTML = '<option value="">Select a job...</option>';
+        jobs.forEach(job => {
+            const option = document.createElement('option');
+            option.value = job.id;
+            option.textContent = job.name;
+            jobSelect.appendChild(option);
+        });
+    } catch (error) {
+        showError(`Failed to load jobs: ${error.message}`);
+    }
+}
+
+window.loadSnapshotsForJob = async () => {
+    const jobId = document.getElementById('restore-job-select').value;
+    const snapshotSelect = document.getElementById('restore-snapshot-select');
+    
+    if (!jobId) {
+        snapshotSelect.innerHTML = '<option value="">Select a job first...</option>';
+        return;
+    }
+    
+    try {
+        snapshotSelect.innerHTML = '<option value="">Loading snapshots...</option>';
+        const snapshots = await api.getSnapshots(jobId);
+        
+        snapshotSelect.innerHTML = '<option value="">Select a snapshot...</option>';
+        snapshots.forEach(snapshot => {
+            const option = document.createElement('option');
+            option.value = snapshot.snapshot_id;
+            const date = new Date(snapshot.created_at).toLocaleString();
+            const size = formatStorage(snapshot.size_bytes || 0);
+            option.textContent = `${date} - ${size} (${snapshot.files_count || 0} files)`;
+            option.dataset.snapshot = JSON.stringify(snapshot);
+            snapshotSelect.appendChild(option);
+        });
+        
+        // Clear estimates when changing job
+        document.getElementById('restore-estimates').style.display = 'none';
+    } catch (error) {
+        showError(`Failed to load snapshots: ${error.message}`);
+        snapshotSelect.innerHTML = '<option value="">Error loading snapshots</option>';
+    }
+};
+
+window.togglePartialRestore = () => {
+    const checkbox = document.getElementById('restore-partial');
+    const filesGroup = document.getElementById('restore-files-group');
+    filesGroup.style.display = checkbox.checked ? 'block' : 'none';
+    if (checkbox.checked) {
+        updateRestoreEstimate();
+    }
+};
+
+window.updateRestoreEstimate = async () => {
+    const snapshotId = document.getElementById('restore-snapshot-select').value;
+    if (!snapshotId) {
+        document.getElementById('restore-estimates').style.display = 'none';
+        return;
+    }
+    
+    const filePathsText = document.getElementById('restore-file-paths').value;
+    const filePaths = filePathsText ? filePathsText.split('\n').filter(p => p.trim()) : null;
+    const tier = document.getElementById('restore-tier').value;
+    
+    try {
+        const estimates = await api.estimateRestore(snapshotId, filePaths);
+        
+        // Update cost display
+        const costEl = document.getElementById('estimate-cost');
+        const costNoteEl = document.getElementById('estimate-cost-note');
+        if (estimates.costs.total_cost > 0) {
+            costEl.textContent = `$${estimates.costs.total_cost.toFixed(4)}`;
+            costNoteEl.textContent = estimates.costs.note || '';
+        } else {
+            costEl.textContent = 'No cost';
+            costNoteEl.textContent = 'Standard storage - no restore fees';
+        }
+        
+        // Update time display
+        const timeEl = document.getElementById('estimate-time');
+        const timeNoteEl = document.getElementById('estimate-time-note');
+        const hours = estimates.time_estimates.total_estimated_hours;
+        if (hours < 1) {
+            timeEl.textContent = `${Math.round(hours * 60)} minutes`;
+        } else if (hours < 24) {
+            timeEl.textContent = `${hours.toFixed(1)} hours`;
+        } else {
+            timeEl.textContent = `${(hours / 24).toFixed(1)} days`;
+        }
+        timeNoteEl.textContent = estimates.time_estimates.note || '';
+        
+        // Update size display
+        const sizeEl = document.getElementById('estimate-size');
+        const sizeNoteEl = document.getElementById('estimate-size-note');
+        sizeEl.textContent = formatStorage(estimates.estimated_restore_size_bytes);
+        sizeNoteEl.textContent = `${estimates.estimated_files_to_restore || 0} files`;
+        
+        document.getElementById('restore-estimates').style.display = 'block';
+        
+        // Show warning if Glacier restore needed
+        if (estimates.needs_glacier_restore) {
+            if (estimates.restore_status === 'in_progress') {
+                showNotification('Glacier restore is already in progress. Please wait for it to complete.', 'info');
+            } else if (estimates.restore_status === 'ready') {
+                showNotification('Glacier restore is ready. You can proceed with the restore.', 'info');
+            } else {
+                showNotification('This snapshot is in Glacier. A restore request will be initiated.', 'warning');
+            }
+        }
+    } catch (error) {
+        showError(`Failed to get estimates: ${error.message}`);
+    }
+};
+
+window.initiateRestore = async () => {
+    const snapshotId = document.getElementById('restore-snapshot-select').value;
+    const restorePath = document.getElementById('restore-path').value;
+    const filePathsText = document.getElementById('restore-file-paths').value;
+    const filePaths = filePathsText ? filePathsText.split('\n').filter(p => p.trim()) : null;
+    
+    if (!snapshotId || !restorePath) {
+        showError('Please select a snapshot and provide a restore path');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to restore to ${restorePath}?`)) {
+        return;
+    }
+    
+    try {
+        const result = await api.initiateRestore(snapshotId, restorePath, filePaths);
+        showNotification(result.message || 'Restore initiated successfully', 'info');
+        if (result.note) {
+            showNotification(result.note, 'warning');
+        }
+        
+        // Clear form
+        document.getElementById('restore-path').value = '';
+        document.getElementById('restore-file-paths').value = '';
+        document.getElementById('restore-partial').checked = false;
+        document.getElementById('restore-files-group').style.display = 'none';
+    } catch (error) {
+        showError(`Failed to initiate restore: ${error.message}`);
+    }
+};
 
 // Close modals on outside click
 window.onclick = function(event) {

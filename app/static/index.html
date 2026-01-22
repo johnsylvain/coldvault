@@ -24,6 +24,10 @@
                     <i class="ph ph-list-bullets"></i>
                     <span>Backup Jobs</span>
                 </a>
+                <a href="#/restore" class="nav-item" onclick="event.preventDefault(); router.navigate('/restore');">
+                    <i class="ph ph-arrow-counter-clockwise"></i>
+                    <span>Restore</span>
+                </a>
                 <div class="nav-item has-submenu" id="metrics-nav-item">
                     <div class="nav-item-header" onclick="toggleSubmenu('metrics')">
                         <div>
@@ -179,6 +183,95 @@
                     
                     <div id="metrics-projection" class="metrics-content">
                         <div id="projection-content" class="loading">Loading projections...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="main-tab-restore" class="main-tab-content">
+                <div class="restore-section">
+                    <div class="restore-header">
+                        <h2><i class="ph ph-arrow-counter-clockwise"></i> Restore Backup</h2>
+                    </div>
+                    
+                    <div class="restore-form-container">
+                        <div class="restore-step">
+                            <h3><i class="ph ph-list"></i> Step 1: Select Job & Snapshot</h3>
+                            <div class="form-group">
+                                <label>Backup Job *</label>
+                                <select id="restore-job-select" onchange="loadSnapshotsForJob()" required>
+                                    <option value="">Select a job...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Snapshot *</label>
+                                <select id="restore-snapshot-select" onchange="updateRestoreEstimate()" required>
+                                    <option value="">Select a snapshot...</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="restore-step">
+                            <h3><i class="ph ph-folder"></i> Step 2: Configure Restore</h3>
+                            <div class="form-group">
+                                <label>Restore Path *</label>
+                                <input type="text" id="restore-path" placeholder="/path/to/restore" required>
+                                <small>Local directory where files will be restored</small>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="restore-partial" onchange="togglePartialRestore()">
+                                    Restore specific files only
+                                </label>
+                            </div>
+                            <div class="form-group" id="restore-files-group" style="display: none;">
+                                <label>File Paths (one per line)</label>
+                                <textarea id="restore-file-paths" rows="5" placeholder="/path/to/file1&#10;/path/to/file2"></textarea>
+                                <small>Leave empty to restore entire snapshot</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Restore Tier (for Glacier)</label>
+                                <select id="restore-tier" onchange="updateRestoreEstimate()">
+                                    <option value="Expedited">Expedited (1-5 min, $0.03/GB)</option>
+                                    <option value="Standard" selected>Standard (3-5 hours, $0.01/GB)</option>
+                                    <option value="Bulk">Bulk (5-12 hours, $0.0025/GB)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="restore-estimates" id="restore-estimates" style="display: none;">
+                            <h3><i class="ph ph-calculator"></i> Estimated Cost & Time</h3>
+                            <div class="estimate-grid">
+                                <div class="estimate-card">
+                                    <div class="estimate-label">Estimated Cost</div>
+                                    <div class="estimate-value" id="estimate-cost">-</div>
+                                    <div class="estimate-note" id="estimate-cost-note"></div>
+                                </div>
+                                <div class="estimate-card">
+                                    <div class="estimate-label">Estimated Time</div>
+                                    <div class="estimate-value" id="estimate-time">-</div>
+                                    <div class="estimate-note" id="estimate-time-note"></div>
+                                </div>
+                                <div class="estimate-card">
+                                    <div class="estimate-label">Data Size</div>
+                                    <div class="estimate-value" id="estimate-size">-</div>
+                                    <div class="estimate-note" id="estimate-size-note"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="restore-actions">
+                            <button class="btn btn-success" onclick="initiateRestore()">
+                                <i class="ph ph-play"></i> Start Restore
+                            </button>
+                            <button class="btn" onclick="updateRestoreEstimate()">
+                                <i class="ph ph-arrows-clockwise"></i> Refresh Estimates
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="restore-history" id="restore-history" style="display: none;">
+                        <h3><i class="ph ph-clock-clockwise"></i> Restore History</h3>
+                        <div id="restore-history-list" class="loading">Loading restore history...</div>
                     </div>
                 </div>
             </div>

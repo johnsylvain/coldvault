@@ -130,3 +130,29 @@ export async function getMetricsHistory(days = 30) {
 export async function getMetricsProjection(daysAhead = 30) {
     return fetchJSON(`${API_BASE}/metrics/projection?days_ahead=${daysAhead}`);
 }
+
+// Restore API
+export async function getSnapshots(jobId) {
+    return fetchJSON(`${API_BASE}/restore/jobs/${jobId}/snapshots`);
+}
+
+export async function getSnapshot(snapshotId) {
+    return fetchJSON(`${API_BASE}/restore/snapshots/${snapshotId}`);
+}
+
+export async function estimateRestore(snapshotId, filePaths = null) {
+    const params = new URLSearchParams({ snapshot_id: snapshotId });
+    if (filePaths && filePaths.length > 0) {
+        // Join file paths with newlines for the API
+        params.append('file_paths', filePaths.join('\n'));
+    }
+    return fetchJSON(`${API_BASE}/restore/estimate?${params.toString()}`);
+}
+
+export async function initiateRestore(snapshotId, restorePath, filePaths = null) {
+    return postJSON(`${API_BASE}/restore/restore`, {
+        snapshot_id: snapshotId,
+        restore_path: restorePath,
+        file_paths: filePaths
+    });
+}

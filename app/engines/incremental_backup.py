@@ -368,8 +368,14 @@ class IncrementalBackupEngine:
                     uploaded_count += 1
                     uploaded_bytes += signature['size']
                     
-                    # Log progress
-                    if uploaded_count % 100 == 0 or uploaded_count == len(upload_tasks):
+                    # Log progress more frequently
+                    # Log every 10 files, or every 5 files for first 50, or at completion
+                    should_log = (
+                        uploaded_count % 10 == 0 or  # Every 10 files
+                        (uploaded_count <= 50 and uploaded_count % 5 == 0) or  # Every 5 files for first 50
+                        uploaded_count == len(upload_tasks)  # Always log at completion
+                    )
+                    if should_log:
                         with self.upload_lock:
                             mb_uploaded = uploaded_bytes / (1024**2)
                             percent = (uploaded_count / len(upload_tasks)) * 100

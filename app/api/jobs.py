@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
-from app.database import get_db, Job, JobType, StorageClass, BackupStatus
+from app.database import get_db, Job, JobType, StorageClass, BackupStatus, BackupRun
 from app.scheduler import scheduler
 
 router = APIRouter()
@@ -80,14 +80,66 @@ class JobResponse(BaseModel):
     last_run_at: Optional[datetime]
     last_run_status: Optional[str]
     next_run_at: Optional[datetime]
+    current_run_elapsed_seconds: Optional[float] = None
+    projected_completion_seconds: Optional[float] = None
+    projected_completion_at: Optional[str] = None
+    current_run_started_at: Optional[str] = None
     
     class Config:
         from_attributes = True
 
+def calculate_projected_time(job_id: int, db: Session) -> dict:
+    """Calculate projected completion time for a running job based on historical data"""
+    from datetime import datetime
+    from sqlalchemy import func
+    
+    # Get current running backup run
+    current_run = db.query(BackupRun).filter(
+        BackupRun.job_id == job_id,
+        BackupRun.status == BackupStatus.RUNNING
+    ).order_by(BackupRun.started_at.desc()).first()
+    
+    if not current_run or not current_run.started_at:
+        return {
+            'elapsed_seconds': None,
+            'projected_completion_seconds': None,
+            'projected_completion_at': None
+        }
+    
+    # Calculate elapsed time
+    elapsed = (datetime.utcnow() - current_run.started_at).total_seconds()
+    
+    # Get average duration from successful historical runs (last 10)
+    historical_runs = db.query(BackupRun).filter(
+        BackupRun.job_id == job_id,
+        BackupRun.status == BackupStatus.SUCCESS,
+        BackupRun.duration_seconds.isnot(None)
+    ).order_by(BackupRun.started_at.desc()).limit(10).all()
+    
+    if historical_runs:
+        avg_duration = sum(r.duration_seconds for r in historical_runs) / len(historical_runs)
+        projected_completion = avg_duration
+        projected_completion_at = current_run.started_at.replace(tzinfo=None) + timedelta(seconds=projected_completion)
+    else:
+        # If no historical data, estimate based on elapsed time (assume 50% progress)
+        projected_completion = elapsed * 2 if elapsed > 0 else None
+        projected_completion_at = current_run.started_at.replace(tzinfo=None) + timedelta(seconds=projected_completion) if projected_completion else None
+    
+    return {
+        'elapsed_seconds': elapsed,
+        'projected_completion_seconds': projected_completion,
+        'projected_completion_at': projected_completion_at.isoformat() if projected_completion_at else None
+    }
+
 @router.get("/", response_model=List[JobResponse])
 def list_jobs(db: Session = Depends(get_db)):
     """List all backup jobs"""
+    import logging
+    from datetime import datetime, timedelta
+    logger = logging.getLogger(__name__)
+    
     jobs = db.query(Job).all()
+    logger.info(f"list_jobs: Found {len(jobs)} jobs in database: {[(j.id, j.name) for j in jobs]}")
     result = []
     for job in jobs:
         job_dict = {
@@ -100,7 +152,28 @@ def list_jobs(db: Session = Depends(get_db)):
         'exclude_patterns': json.loads(job.exclude_patterns) if job.exclude_patterns else None,
         'incremental_enabled': job.incremental_enabled if hasattr(job, 'incremental_enabled') else True,
     }
-    result.append(JobResponse(**job_dict))
+        
+        # Add runtime and projection for running jobs
+        if job.last_run_status == BackupStatus.RUNNING:
+            projection = calculate_projected_time(job.id, db)
+            job_dict['current_run_elapsed_seconds'] = projection['elapsed_seconds']
+            job_dict['projected_completion_seconds'] = projection['projected_completion_seconds']
+            job_dict['projected_completion_at'] = projection['projected_completion_at']
+            
+            # Get current run start time
+            current_run = db.query(BackupRun).filter(
+                BackupRun.job_id == job.id,
+                BackupRun.status == BackupStatus.RUNNING
+            ).order_by(BackupRun.started_at.desc()).first()
+            if current_run:
+                job_dict['current_run_started_at'] = current_run.started_at.isoformat() if current_run.started_at else None
+        else:
+            job_dict['current_run_elapsed_seconds'] = None
+            job_dict['projected_completion_seconds'] = None
+            job_dict['projected_completion_at'] = None
+            job_dict['current_run_started_at'] = None
+        
+        result.append(JobResponse(**job_dict))
     return result
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -124,6 +197,15 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(job_data: JobCreate, db: Session = Depends(get_db)):
     """Create a new backup job"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"create_job: Starting creation of job '{job_data.name}'")
+    
+    # Count existing jobs before creation
+    existing_count = db.query(Job).count()
+    logger.info(f"create_job: Current job count in DB: {existing_count}")
+    
     # Validate job type
     try:
         job_type = JobType(job_data.job_type)
@@ -139,7 +221,12 @@ def create_job(job_data: JobCreate, db: Session = Depends(get_db)):
     # Check if job name already exists
     existing = db.query(Job).filter(Job.name == job_data.name).first()
     if existing:
+        logger.warning(f"create_job: Job name '{job_data.name}' already exists")
         raise HTTPException(status_code=400, detail="Job name already exists")
+    
+    # List all existing jobs before creation
+    all_jobs_before = db.query(Job).all()
+    logger.info(f"create_job: Existing jobs before creation: {[j.id for j in all_jobs_before]}")
     
     # Create job
     job = Job(
@@ -167,6 +254,16 @@ def create_job(job_data: JobCreate, db: Session = Depends(get_db)):
     db.add(job)
     db.commit()
     db.refresh(job)
+    
+    logger.info(f"create_job: Created job with ID {job.id}")
+    
+    # Count jobs after creation
+    jobs_after = db.query(Job).count()
+    logger.info(f"create_job: Job count after creation: {jobs_after}")
+    
+    # List all jobs after creation
+    all_jobs_after = db.query(Job).all()
+    logger.info(f"create_job: All jobs after creation: {[(j.id, j.name) for j in all_jobs_after]}")
     
     # Schedule the job
     if job.enabled:
