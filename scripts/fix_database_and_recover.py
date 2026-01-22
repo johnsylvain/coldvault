@@ -157,6 +157,15 @@ def recover_stuck_backup(backup_run_id: int = None):
             backup_run.storage_class = snapshot.storage_class
             backup_run.error_message = None
             
+            # Ensure manifest_key is set for incremental backups
+            if snapshot.is_incremental and not snapshot.manifest_key:
+                # Construct manifest key from job info
+                job = db.query(Job).filter(Job.id == snapshot.job_id).first()
+                if job:
+                    manifest_key = f"{job.s3_prefix}/{job.name}.manifest.json"
+                    snapshot.manifest_key = manifest_key
+                    logger.info(f"Set manifest_key: {manifest_key}")
+            
             db.commit()
             logger.info(f"✓ Recovered backup run {backup_run_id} - marked as SUCCESS")
         else:

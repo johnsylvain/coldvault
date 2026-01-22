@@ -513,21 +513,9 @@ async function loadJobs() {
             const statusClass = job.last_run_status ? job.last_run_status.toLowerCase() : 'pending';
             
             // Build runtime display for running jobs
+            // Note: We don't create runtime displays here for running jobs because
+            // updateRunningJobRuntimes() will handle it to avoid duplicates
             let runtimeDisplay = '';
-            if (isRunning && job.current_run_elapsed_seconds !== null && job.current_run_elapsed_seconds !== undefined) {
-                runtimeDisplay = `<span class="job-meta-item">
-                    <i class="ph ph-timer"></i>
-                    <span>Running: ${formatDuration(job.current_run_elapsed_seconds)}</span>
-                </span>`;
-                if (job.projected_completion_at) {
-                    const projectedAt = new Date(job.projected_completion_at);
-                    const timeUntil = Math.max(0, Math.round((projectedAt - new Date()) / 1000));
-                    runtimeDisplay += `<span class="job-meta-item">
-                        <i class="ph ph-hourglass"></i>
-                        <span>Est. ${formatDuration(timeUntil)} remaining</span>
-                    </span>`;
-                }
-            }
             
             return `
                 <div class="job-item" id="job-${job.id}">

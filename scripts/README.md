@@ -55,6 +55,29 @@ docker compose exec coldvault python scripts/refresh_storage_metrics.py
 - Records updated metrics
 - Useful when dashboard shows incorrect storage totals
 
+### `sync_from_s3.py`
+
+Syncs backup information from S3 to database. Creates/updates snapshot records based on what's actually in S3.
+
+**Usage:**
+```bash
+# Sync a specific job from S3
+docker compose exec coldvault python scripts/sync_from_s3.py --job-id 1
+
+# Dry run (see what would be done without making changes)
+docker compose exec coldvault python scripts/sync_from_s3.py --job-id 1 --dry-run
+
+# Sync and update metrics
+docker compose exec coldvault python scripts/sync_from_s3.py --job-id 1 --update-metrics
+```
+
+**What it does:**
+- Scans S3 for backup files/manifests
+- Creates or updates snapshot records in database
+- Sets manifest_key properly for incremental backups
+- Can update storage metrics after sync
+- Useful when database and S3 are out of sync
+
 ## Running Scripts
 
 All scripts should be run from the project root directory. When running in Docker:
