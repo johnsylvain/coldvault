@@ -14,6 +14,7 @@ import tempfile
 from app.aws import s3_client
 from app.encryption import encrypt_file
 from app.config import settings
+from app.retry_utils import is_retryable_error
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,7 @@ class DatasetBackupEngine:
             
             try:
                 backup_logger.info("Starting S3 upload...")
+                backup_logger.info(f"Upload will automatically retry up to {settings.s3_upload_max_retries} times on transient errors")
                 
                 # Check S3 client before attempting upload
                 if not s3_client.client:
@@ -187,8 +189,13 @@ class DatasetBackupEngine:
                     backup_logger.error(error_msg)
                     raise Exception(error_msg)
                 
+                # Check connection health
+                if not s3_client.check_connection():
+                    backup_logger.warning("S3 connection check failed, but proceeding with upload attempt")
+                
                 backup_logger.info(f"S3 client initialized, bucket: {job.s3_bucket}, region: {settings.aws_region}")
                 
+                # Upload with retry logic (handled by S3Client.upload_file)
                 s3_client.upload_file(
                     backup_file,
                     job.s3_bucket,
@@ -201,7 +208,17 @@ class DatasetBackupEngine:
                 raise
             except Exception as e:
                 error_msg = str(e)
+                is_retryable = is_retryable_error(e)
+                
                 backup_logger.error(f"S3 upload failed: {error_msg}", exc_info=True)
+                
+                if is_retryable:
+                    backup_logger.error(
+                        f"Upload failed with retryable error after {settings.s3_upload_max_retries + 1} attempts. "
+                        f"This may indicate persistent network issues."
+                    )
+                else:
+                    backup_logger.error("Upload failed with non-retryable error. This indicates a configuration or permission issue.")
                 
                 # Provide helpful error messages
                 if "not initialized" in error_msg.lower() or "credentials" in error_msg.lower():

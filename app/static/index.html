@@ -10,8 +10,12 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+        <i class="ph ph-list"></i>
+    </button>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeMobileMenu()"></div>
     <div class="app-layout">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h1><i class="ph ph-shield-check"></i> ColdVault</h1>
             </div>
@@ -51,7 +55,7 @@
             </nav>
         </aside>
         
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <div id="notification" class="notification"></div>
             
             <div id="main-tab-dashboard" class="main-tab-content">

@@ -133,10 +133,46 @@ class BackupWorker:
                 else:
                     raise ValueError(f"Unknown job type: {job.job_type}")
                 
-                # Update backup run with results
-                backup_run.status = BackupStatus.SUCCESS
-                backup_run.completed_at = datetime.utcnow()
-                backup_run.duration_seconds = (backup_run.completed_at - backup_run.started_at).total_seconds()
+                # Check for partial success (upload errors in incremental backups)
+                upload_errors_count = result.get("upload_errors", 0)
+                files_count = result.get("files_count", 0)
+                total_files_scanned = result.get("total_files_scanned", files_count)
+                
+                # Determine if backup is successful or partial
+                is_partial_success = upload_errors_count > 0
+                success_rate = (files_count / total_files_scanned * 100) if total_files_scanned > 0 else 100.0
+                
+                # Mark as success if >95% of files uploaded, otherwise mark as failed
+                if is_partial_success and success_rate < 95.0:
+                    # Too many failures - mark as failed
+                    backup_run.status = BackupStatus.FAILED
+                    backup_run.completed_at = datetime.utcnow()
+                    backup_run.duration_seconds = (backup_run.completed_at - backup_run.started_at).total_seconds()
+                    backup_run.error_message = (
+                        f"Backup partially failed: {upload_errors_count} files failed to upload "
+                        f"({success_rate:.1f}% success rate)"
+                    )
+                    job.last_run_status = BackupStatus.FAILED
+                    backup_logger.error("=" * 60)
+                    backup_logger.error("BACKUP FAILED (Too many upload errors)")
+                    backup_logger.error(f"Files uploaded: {files_count:,} / {total_files_scanned:,} ({success_rate:.1f}%)")
+                    backup_logger.error(f"Upload errors: {upload_errors_count}")
+                    backup_logger.error("=" * 60)
+                    db.commit()
+                    notification_service.send_backup_failure(job, backup_run, backup_run.error_message)
+                    return
+                else:
+                    # Success or acceptable partial success
+                    backup_run.status = BackupStatus.SUCCESS
+                    backup_run.completed_at = datetime.utcnow()
+                    backup_run.duration_seconds = (backup_run.completed_at - backup_run.started_at).total_seconds()
+                    
+                    if is_partial_success:
+                        backup_run.error_message = (
+                            f"Partial success: {upload_errors_count} files failed to upload "
+                            f"({success_rate:.1f}% success rate)"
+                        )
+                
                 backup_run.snapshot_id = result.get("snapshot_id")
                 backup_run.size_bytes = result.get("size_bytes")
                 backup_run.files_count = result.get("files_count")
@@ -146,12 +182,20 @@ class BackupWorker:
                 # Log success summary
                 size_gb = (result.get("size_bytes", 0) / (1024**3))
                 backup_logger.info("=" * 60)
-                backup_logger.info("BACKUP COMPLETED SUCCESSFULLY")
+                if is_partial_success:
+                    backup_logger.info("BACKUP COMPLETED WITH WARNINGS")
+                    backup_logger.warning(f"⚠️  {upload_errors_count} files failed to upload ({success_rate:.1f}% success rate)")
+                else:
+                    backup_logger.info("BACKUP COMPLETED SUCCESSFULLY")
                 backup_logger.info(f"Snapshot ID: {result.get('snapshot_id')}")
                 backup_logger.info(f"Files backed up: {result.get('files_count', 0):,}")
+                if total_files_scanned > files_count:
+                    backup_logger.info(f"Total files scanned: {total_files_scanned:,}")
                 backup_logger.info(f"Total size: {size_gb:.2f} GB ({result.get('size_bytes', 0):,} bytes)")
                 backup_logger.info(f"S3 location: s3://{job.s3_bucket}/{result.get('s3_key')}")
                 backup_logger.info(f"Duration: {backup_run.duration_seconds:.2f} seconds")
+                if is_partial_success:
+                    backup_logger.warning("Some files failed to upload. Check logs for details.")
                 backup_logger.info("=" * 60)
                 
                 # Create snapshot record

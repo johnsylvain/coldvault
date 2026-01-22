@@ -1,7 +1,7 @@
 """
 Database models and session management
 """
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, Float, Enum as SQLEnum
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, DateTime, Boolean, Text, Float, Enum as SQLEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -104,7 +104,7 @@ class BackupRun(Base):
     
     # Backup details
     snapshot_id = Column(String, unique=True, index=True)
-    size_bytes = Column(Integer)
+    size_bytes = Column(BigInteger)  # Changed from Integer to support large backups (>2GB)
     files_count = Column(Integer)
     
     # S3 details
@@ -129,7 +129,7 @@ class Snapshot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Snapshot metadata
-    size_bytes = Column(Integer)
+    size_bytes = Column(BigInteger)  # Changed from Integer to support large backups (>2GB)
     files_count = Column(Integer)
     
     # S3 location

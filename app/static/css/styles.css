@@ -206,6 +206,54 @@ body {
     padding: 20px;
     width: calc(100vw - 240px);
     min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+/* Mobile Menu Toggle Button */
+.mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1001;
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 20px;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-md);
+}
+
+.mobile-menu-toggle:hover {
+    background: rgba(51, 65, 85, 0.95);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.mobile-menu-toggle i {
+    display: block;
+}
+
+/* Mobile Overlay */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    opacity: 1;
 }
 
 .stats-grid {
@@ -1600,4 +1648,389 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+/* Clickable date styling */
+.clickable-date {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    transition: opacity 0.2s ease;
+}
+
+.clickable-date:hover {
+    opacity: 0.8;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: block;
+    }
+    
+    .sidebar-overlay {
+        display: block;
+    }
+    
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 16px;
+        padding-top: 60px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .stat-card {
+        padding: 14px;
+    }
+    
+    .stat-card .value {
+        font-size: 28px;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .jobs-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .jobs-header h2 {
+        font-size: 20px;
+    }
+    
+    .job-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .job-info {
+        min-width: 100%;
+        order: 1;
+    }
+    
+    .job-actions {
+        order: 2;
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .job-meta-item {
+        font-size: 11px;
+    }
+    
+    .status-badge-large {
+        min-width: auto;
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        max-width: 95%;
+        margin: 10px auto;
+        max-height: 95vh;
+        border-radius: 16px;
+    }
+    
+    .modal-header {
+        padding: 16px 20px 12px;
+    }
+    
+    .modal-header h2 {
+        font-size: 20px;
+    }
+    
+    .modal-body {
+        padding: 12px 20px;
+    }
+    
+    .modal-footer {
+        padding: 12px 20px 16px;
+    }
+    
+    .form-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .chart-container {
+        padding: 12px;
+    }
+    
+    .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .chart-header > * {
+        width: 100%;
+    }
+    
+    .chart-title {
+        font-size: 16px;
+    }
+    
+    .metrics-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .metrics-header h2 {
+        font-size: 20px;
+    }
+    
+    .metrics-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .summary-card {
+        padding: 12px;
+    }
+    
+    .summary-value {
+        font-size: 20px;
+    }
+    
+    .projection-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .estimate-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .restore-section {
+        padding: 16px;
+    }
+    
+    .restore-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    
+    .restore-header h2 {
+        font-size: 22px;
+    }
+    
+    .restore-form-container {
+        padding: 20px;
+    }
+    
+    .restore-step {
+        margin-bottom: 24px;
+        padding-bottom: 24px;
+    }
+    
+    .restore-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .restore-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .dropdown-menu {
+        right: auto;
+        left: 0;
+        min-width: 100%;
+    }
+    
+    .job-status-meta {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .activity-item {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .activity-content {
+        min-width: calc(100% - 48px);
+    }
+    
+    .storage-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .btn {
+        padding: 10px 14px;
+        font-size: 13px;
+        min-height: 44px; /* Touch target size */
+    }
+    
+    .nav-item {
+        padding: 14px 20px;
+        min-height: 44px; /* Touch target size */
+    }
+    
+    .sidebar-header {
+        padding: 20px 20px 16px;
+    }
+    
+    .sidebar-header h1 {
+        font-size: 16px;
+    }
+    
+    .jobs-section {
+        padding: 16px;
+    }
+    
+    .metrics-section {
+        padding: 16px;
+    }
+    
+    .dashboard-card-body {
+        padding: 12px 16px;
+        max-height: 400px;
+    }
+    
+    /* Ensure charts are responsive */
+    .chart-container > div[style*="height: 400px"] {
+        height: 300px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 12px;
+        padding-top: 56px;
+    }
+    
+    .stat-card {
+        padding: 12px;
+    }
+    
+    .stat-card .value {
+        font-size: 24px;
+    }
+    
+    .stat-card h3 {
+        font-size: 11px;
+    }
+    
+    .jobs-header h2 {
+        font-size: 18px;
+    }
+    
+    .restore-header h2 {
+        font-size: 20px;
+    }
+    
+    .restore-form-container {
+        padding: 16px;
+    }
+    
+    .modal-content {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    
+    .chart-container > div[style*="height: 400px"] {
+        height: 250px !important;
+    }
+    
+    .sidebar {
+        width: 100%;
+        max-width: 280px;
+    }
+    
+    .log-content-inline {
+        font-size: 10px;
+        padding: 10px 12px;
+        max-height: 300px;
+    }
+    
+    .job-item {
+        margin-bottom: 12px;
+    }
+    
+    .dashboard-card-header {
+        padding: 12px 16px;
+    }
+    
+    .dashboard-card-header h3 {
+        font-size: 14px;
+    }
+}
+
+/* Ensure horizontal scrolling for wide content on mobile */
+@media (max-width: 768px) {
+    .main-content {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .dashboard-card-body,
+    .jobs-section,
+    .metrics-section {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevent horizontal scroll on body */
+    body {
+        overflow-x: hidden;
+    }
+}
+
+/* Improve touch targets and spacing */
+@media (max-width: 768px) {
+    .nav-item {
+        touch-action: manipulation;
+    }
+    
+    .btn,
+    .menu-button,
+    .log-toggle {
+        touch-action: manipulation;
+    }
+    
+    /* Better spacing for stacked elements */
+    .job-status-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .job-status-badge {
+        align-self: flex-end;
+    }
 }

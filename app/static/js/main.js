@@ -6,9 +6,85 @@ import * as api from './api.js';
 import { formatStorage, formatCost } from './utils/formatters.js';
 import { showNotification, showError } from './components/notifications.js';
 import { router } from './utils/router.js';
+import { createClickableDate, initializeClickableDates, formatAbsoluteDate } from './utils/helpers.js';
 
 // Expose router globally for onclick handlers
 window.router = router;
+
+// Mobile menu functions
+window.toggleMobileMenu = () => {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggle = document.getElementById('mobile-menu-toggle');
+    const body = document.body;
+    
+    if (sidebar && overlay) {
+        const isOpening = !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('show');
+        
+        // Prevent body scroll when menu is open
+        if (isOpening) {
+            body.style.overflow = 'hidden';
+        } else {
+            body.style.overflow = '';
+        }
+        
+        // Update icon
+        if (toggle) {
+            const icon = toggle.querySelector('i');
+            if (icon) {
+                if (sidebar.classList.contains('open')) {
+                    icon.className = 'ph ph-x';
+                } else {
+                    icon.className = 'ph ph-list';
+                }
+            }
+        }
+    }
+};
+
+window.closeMobileMenu = () => {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggle = document.getElementById('mobile-menu-toggle');
+    const body = document.body;
+    
+    if (sidebar && overlay) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+        body.style.overflow = '';
+        
+        // Update icon
+        if (toggle) {
+            const icon = toggle.querySelector('i');
+            if (icon) {
+                icon.className = 'ph ph-list';
+            }
+        }
+    }
+};
+
+// Close mobile menu when clicking on a nav item
+function setupMobileMenuClose() {
+    // Use event delegation for dynamically added nav items
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.nav-item') && window.innerWidth <= 768) {
+            setTimeout(() => closeMobileMenu(), 100);
+        }
+    });
+    
+    // Also close on window resize if switching to desktop
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (window.innerWidth > 768) {
+                closeMobileMenu();
+            }
+        }, 250);
+    });
+}
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,6 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize router (this will handle the initial route)
     router.init();
+    
+    // Set up mobile menu close handlers
+    setupMobileMenuClose();
     
     // Auto-refresh every 10 seconds
     setInterval(() => {
@@ -274,12 +353,15 @@ async function loadRecentActivity(activities) {
                 <div class="activity-content">
                     <div class="activity-title">${jobName}</div>
                     <div class="activity-meta">
-                        ${startedAt ? startedAt.toLocaleString() : 'Unknown time'} • ${durationText}
+                        ${startedAt ? createClickableDate(activity.started_at) : 'Unknown time'} • ${durationText}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+    
+    // Initialize clickable dates
+    initializeClickableDates(container);
 }
 
 async function loadJobStatusOverview() {
@@ -302,8 +384,8 @@ async function loadJobStatusOverview() {
                               status === 'running' ? 'ph-circle-notch' :
                               'ph-clock';
             
-            const lastRun = job.last_run_at ? new Date(job.last_run_at).toLocaleString() : 'Never';
-            const nextRun = job.next_run_at ? new Date(job.next_run_at).toLocaleString() : 'N/A';
+            const lastRun = job.last_run_at ? createClickableDate(job.last_run_at, { fallback: 'Never' }) : 'Never';
+            const nextRun = job.next_run_at ? createClickableDate(job.next_run_at, { fallback: 'N/A' }) : 'N/A';
             
             return `
                 <div class="job-status-item">
@@ -321,6 +403,9 @@ async function loadJobStatusOverview() {
                 </div>
             `;
         }).join('');
+        
+        // Initialize clickable dates
+        initializeClickableDates(container);
     } catch (error) {
         container.innerHTML = `<div class="error">Failed to load jobs: ${error.message}</div>`;
     }
@@ -467,7 +552,7 @@ async function loadJobs() {
                                 ${job.last_run_at && !isRunning ? `
                                 <span class="job-meta-item">
                                     <i class="ph ph-calendar"></i>
-                                    <span>${new Date(job.last_run_at).toLocaleString()}</span>
+                                    ${createClickableDate(job.last_run_at)}
                                 </span>
                                 ` : ''}
                             </div>
@@ -510,6 +595,9 @@ async function loadJobs() {
                 </div>
             `;
         }).join('');
+        
+        // Initialize clickable dates
+        initializeClickableDates(jobsList);
         
         // Load logs for expanded jobs
         jobs.forEach(job => {
@@ -1328,7 +1416,7 @@ window.loadSnapshotsForJob = async () => {
         snapshots.forEach(snapshot => {
             const option = document.createElement('option');
             option.value = snapshot.snapshot_id;
-            const date = new Date(snapshot.created_at).toLocaleString();
+            const date = formatAbsoluteDate(snapshot.created_at);
             const size = formatStorage(snapshot.size_bytes || 0);
             option.textContent = `${date} - ${size} (${snapshot.files_count || 0} files)`;
             option.dataset.snapshot = JSON.stringify(snapshot);

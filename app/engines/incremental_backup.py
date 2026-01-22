@@ -17,6 +17,7 @@ from app.aws import s3_client
 from app.encryption import encrypt_file
 from app.config import settings
 from app.database import SessionLocal, Snapshot, Job
+from app.retry_utils import is_retryable_error, RetryContext
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,11 @@ class IncrementalBackupEngine:
         return (files_to_backup, files_unchanged, total_size, new_size, file_count, skipped_files)
     
     def upload_file_to_s3(self, local_path: str, s3_key: str, job, storage_class: str, backup_logger, encryption_enabled: bool) -> Optional[str]:
-        """Upload a single file to S3, optionally encrypting it first"""
+        """
+        Upload a single file to S3, optionally encrypting it first.
+        Uses retry logic from S3Client, with additional error handling.
+        """
+        encrypted_path = None
         try:
             # Encrypt if needed (encrypt to temp file, upload, then delete temp)
             if encryption_enabled:
@@ -208,19 +213,22 @@ class IncrementalBackupEngine:
                 upload_path = encrypted_path
             else:
                 upload_path = local_path
-                encrypted_path = None
             
             # Upload to S3 (keep original S3 key, encryption is transparent)
+            # S3Client.upload_file now has built-in retry logic
             s3_client.upload_file(upload_path, job.s3_bucket, s3_key, storage_class=storage_class)
-            
-            # Clean up encrypted temp file if created
-            if encrypted_path and os.path.exists(encrypted_path):
-                os.unlink(encrypted_path)
             
             return s3_key
         except Exception as e:
             backup_logger.error(f"Failed to upload {local_path} to S3: {e}")
             raise
+        finally:
+            # Clean up encrypted temp file if created
+            if encrypted_path and os.path.exists(encrypted_path):
+                try:
+                    os.unlink(encrypted_path)
+                except Exception as cleanup_error:
+                    backup_logger.warning(f"Failed to clean up encrypted temp file: {cleanup_error}")
     
     def backup(self, job, backup_run, db, backup_logger=None, cancellation_flags=None, backup_run_id=None):
         """Execute an incremental backup - uploads files directly to S3"""
@@ -312,7 +320,8 @@ class IncrementalBackupEngine:
         s3_storage_class = storage_class_map.get(job.storage_class.value, "DEEP_ARCHIVE")
         
         uploaded_files = {}  # rel_path -> s3_key
-        upload_errors = []
+        upload_errors = []  # (rel_path, error, is_retryable)
+        failed_retryable = []  # Files that failed but are retryable
         uploaded_count = 0
         uploaded_bytes = 0
         
@@ -384,8 +393,62 @@ class IncrementalBackupEngine:
                                 f"({percent:.1f}%), {mb_uploaded:.2f} MB uploaded"
                             )
                 except Exception as e:
-                    upload_errors.append((rel_path, str(e)))
-                    backup_logger.error(f"Failed to upload {rel_path}: {e}")
+                    error_str = str(e)
+                    is_retryable = is_retryable_error(e)
+                    upload_errors.append((rel_path, error_str, is_retryable))
+                    
+                    if is_retryable:
+                        # Store for retry after initial batch
+                        failed_retryable.append((rel_path, signature, full_path, s3_key))
+                        backup_logger.warning(
+                            f"Failed to upload {rel_path} (retryable): {e}. Will retry after initial batch."
+                        )
+                    else:
+                        backup_logger.error(f"Failed to upload {rel_path} (non-retryable): {e}")
+        
+        # Retry failed uploads that are retryable
+        if failed_retryable:
+            backup_logger.info(f"Retrying {len(failed_retryable)} failed uploads...")
+            retry_start = datetime.utcnow()
+            
+            # Retry failed uploads with exponential backoff
+            for rel_path, signature, full_path, s3_key in failed_retryable:
+                check_cancellation()
+                
+                with RetryContext(
+                    max_retries=settings.s3_upload_max_retries,
+                    base_delay=settings.s3_upload_retry_backoff_base,
+                    max_delay=settings.s3_upload_retry_backoff_max,
+                    on_retry=lambda e, attempt, delay: backup_logger.warning(
+                        f"Retry {attempt} for {rel_path} after {delay:.2f}s: {e}"
+                    )
+                ) as retry:
+                    for attempt in retry:
+                        try:
+                            s3_key_uploaded = self.upload_file_to_s3(
+                                full_path, s3_key, job, s3_storage_class, backup_logger, job.encryption_enabled
+                            )
+                            uploaded_files[rel_path] = s3_key_uploaded
+                            uploaded_count += 1
+                            uploaded_bytes += signature['size']
+                            
+                            # Remove from errors list
+                            upload_errors = [(r, e, ret) for r, e, ret in upload_errors if r != rel_path]
+                            
+                            backup_logger.info(f"Successfully retried upload for {rel_path}")
+                            break  # Success, exit retry loop
+                        except Exception as e:
+                            if not retry.should_retry(e):
+                                # Non-retryable on retry - mark as permanent failure
+                                backup_logger.error(f"Permanent failure on retry for {rel_path}: {e}")
+                                break
+                            retry.wait(e)
+                    else:
+                        # All retries exhausted
+                        backup_logger.error(f"Failed to upload {rel_path} after all retries")
+            
+            retry_duration = (datetime.utcnow() - retry_start).total_seconds()
+            backup_logger.info(f"Retry phase complete in {retry_duration:.1f} seconds")
         
         upload_duration = (datetime.utcnow() - upload_start).total_seconds()
         backup_logger.info(f"Upload complete in {upload_duration:.1f} seconds")

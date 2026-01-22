@@ -49,6 +49,11 @@ class Router {
             path = '/dashboard';
         }
 
+        // Close mobile menu on navigation
+        if (typeof window.closeMobileMenu === 'function' && window.innerWidth <= 768) {
+            window.closeMobileMenu();
+        }
+
         // Try exact match first
         if (this.routes.has(path)) {
             const handler = this.routes.get(path);

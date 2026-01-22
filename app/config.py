@@ -53,5 +53,14 @@ class Settings(BaseSettings):
     # Performance settings
     backup_scan_threads: int = 4  # Number of threads for file scanning (default: 4)
     backup_upload_threads: int = 4  # Number of threads for S3 uploads (default: 4)
+    
+    # S3 Upload Retry & Network Resilience
+    s3_upload_max_retries: int = 5  # Maximum retry attempts for uploads (default: 5)
+    s3_upload_retry_backoff_base: float = 2.0  # Base seconds for exponential backoff (default: 2.0)
+    s3_upload_retry_backoff_max: float = 60.0  # Maximum backoff seconds (default: 60.0)
+    s3_connect_timeout: int = 30  # Connection timeout in seconds (default: 30)
+    s3_read_timeout: int = 300  # Read timeout in seconds (default: 300)
+    s3_multipart_threshold: int = 8 * 1024 * 1024  # Size threshold for multipart uploads in bytes (default: 8MB)
+    s3_multipart_chunksize: int = 8 * 1024 * 1024  # Chunk size for multipart uploads in bytes (default: 8MB)
 
 settings = Settings()

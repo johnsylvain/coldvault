@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 
 from app.config import settings
+from app.retry_utils import RetryContext, is_retryable_error
 
 logger = logging.getLogger(__name__)
 
@@ -43,28 +44,94 @@ class ResticBackupEngine:
         env["AWS_SECRET_ACCESS_KEY"] = settings.aws_secret_access_key or ""
         env["RESTIC_PASSWORD"] = settings.encryption_key or ""
         
-        # Initialize repository if needed
+        # Initialize repository if needed (with retry logic)
         backup_logger.info("Checking restic repository...")
-        try:
+        
+        def check_repository():
+            """Check if repository exists"""
             result = subprocess.run(
                 [self.restic_binary, "snapshots", "--repo", repo_url],
                 env=env,
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=300  # 5 minute timeout
             )
-            backup_logger.info("Repository exists and is accessible")
-        except subprocess.CalledProcessError:
-            # Repository doesn't exist, initialize it
-            backup_logger.info(f"Initializing new restic repository at {repo_url}")
+            return result
+        
+        def init_repository():
+            """Initialize new repository"""
             result = subprocess.run(
                 [self.restic_binary, "init", "--repo", repo_url],
                 env=env,
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=300  # 5 minute timeout
             )
-            backup_logger.info("Repository initialized successfully")
+            return result
+        
+        repo_exists = False
+        with RetryContext(
+            max_retries=settings.s3_upload_max_retries,
+            base_delay=settings.s3_upload_retry_backoff_base,
+            max_delay=settings.s3_upload_retry_backoff_max,
+            on_retry=lambda e, attempt, delay: backup_logger.warning(
+                f"Repository check retry {attempt} after {delay:.2f}s: {e}"
+            )
+        ) as retry:
+            for attempt in retry:
+                try:
+                    result = check_repository()
+                    backup_logger.info("Repository exists and is accessible")
+                    repo_exists = True
+                    break
+                except subprocess.TimeoutExpired as e:
+                    backup_logger.warning(f"Repository check timed out: {e}")
+                    if not retry.should_retry(e):
+                        raise
+                    retry.wait(e)
+                except subprocess.CalledProcessError as e:
+                    # Check if it's a network/connection error
+                    error_output = e.stderr or e.stdout or ""
+                    if "connection" in error_output.lower() or "network" in error_output.lower() or "timeout" in error_output.lower():
+                        if retry.should_retry(e):
+                            backup_logger.warning(f"Network error checking repository: {e.stderr}")
+                            retry.wait(e)
+                            continue
+                    # Repository doesn't exist, try to initialize
+                    break
+                except Exception as e:
+                    if not retry.should_retry(e):
+                        raise
+                    retry.wait(e)
+        
+        if not repo_exists:
+            # Repository doesn't exist, initialize it (with retry)
+            backup_logger.info(f"Initializing new restic repository at {repo_url}")
+            with RetryContext(
+                max_retries=settings.s3_upload_max_retries,
+                base_delay=settings.s3_upload_retry_backoff_base,
+                max_delay=settings.s3_upload_retry_backoff_max,
+                on_retry=lambda e, attempt, delay: backup_logger.warning(
+                    f"Repository init retry {attempt} after {delay:.2f}s: {e}"
+                )
+            ) as retry:
+                for attempt in retry:
+                    try:
+                        result = init_repository()
+                        backup_logger.info("Repository initialized successfully")
+                        break
+                    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
+                        if not retry.should_retry(e):
+                            raise
+                        error_output = e.stderr if hasattr(e, 'stderr') else str(e)
+                        backup_logger.warning(f"Repository init failed: {error_output}")
+                        retry.wait(e)
+                    except Exception as e:
+                        if not retry.should_retry(e):
+                            raise
+                        retry.wait(e)
         
         # Build restic backup command
         cmd = [self.restic_binary, "backup", "--repo", repo_url, "--verbose"]
@@ -93,18 +160,63 @@ class ResticBackupEngine:
         
         backup_logger.info("Starting restic backup...")
         backup_logger.info(f"Command: {' '.join(cmd[:5])}... [paths]")  # Don't log full command with paths
+        backup_logger.info(f"Restic will retry on network errors. Additional retries: {settings.s3_upload_max_retries}")
         
-        try:
-            # Note: restic doesn't support graceful cancellation easily
-            # We'll check before starting, but once restic starts, it will complete
-            # For true cancellation, we'd need to kill the process (not implemented here)
-            result = subprocess.run(
-                cmd,
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True
+        # Execute backup with retry logic
+        with RetryContext(
+            max_retries=settings.s3_upload_max_retries,
+            base_delay=settings.s3_upload_retry_backoff_base,
+            max_delay=settings.s3_upload_retry_backoff_max,
+            on_retry=lambda e, attempt, delay: backup_logger.warning(
+                f"Restic backup retry {attempt} after {delay:.2f}s: {e}"
             )
+        ) as retry:
+            for attempt in retry:
+                try:
+                    check_cancellation()  # Check before each attempt
+                    
+                    # Note: restic doesn't support graceful cancellation easily
+                    # We'll check before starting, but once restic starts, it will complete
+                    # For true cancellation, we'd need to kill the process (not implemented here)
+                    result = subprocess.run(
+                        cmd,
+                        env=env,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=86400  # 24 hour timeout for large backups
+                    )
+                    break  # Success, exit retry loop
+                except subprocess.TimeoutExpired as e:
+                    backup_logger.error(f"Restic backup timed out after 24 hours: {e}")
+                    if not retry.should_retry(e):
+                        raise Exception(f"Restic backup timed out: {e}")
+                    retry.wait(e)
+                except subprocess.CalledProcessError as e:
+                    error_output = e.stderr or e.stdout or ""
+                    
+                    # Check if error is retryable (network/connection issues)
+                    is_network_error = (
+                        "connection" in error_output.lower() or
+                        "network" in error_output.lower() or
+                        "timeout" in error_output.lower() or
+                        "temporary" in error_output.lower() or
+                        "503" in error_output or
+                        "500" in error_output
+                    )
+                    
+                    if is_network_error and retry.should_retry(e):
+                        backup_logger.warning(f"Network error during restic backup: {error_output[:200]}")
+                        retry.wait(e)
+                        continue
+                    else:
+                        # Non-retryable error or all retries exhausted
+                        backup_logger.error(f"Restic backup failed: {error_output}")
+                        raise Exception(f"Restic backup failed: {error_output}")
+                except Exception as e:
+                    if not retry.should_retry(e):
+                        raise
+                    retry.wait(e)
             
             # Log restic output
             if result.stdout:
@@ -133,27 +245,55 @@ class ResticBackupEngine:
                             break
             
             if not snapshot_hash:
-                # Get latest snapshot
-                snapshots_result = subprocess.run(
-                    [self.restic_binary, "snapshots", "--repo", repo_url, "--json", "--last"],
-                    env=env,
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                if snapshots_result.stdout:
-                    snapshots = json.loads(snapshots_result.stdout)
-                    if snapshots:
-                        snapshot_hash = snapshots[0].get("id")
+                # Get latest snapshot (with retry)
+                with RetryContext(
+                    max_retries=3,  # Fewer retries for metadata operations
+                    base_delay=settings.s3_upload_retry_backoff_base,
+                    max_delay=10.0
+                ) as retry:
+                    for attempt in retry:
+                        try:
+                            snapshots_result = subprocess.run(
+                                [self.restic_binary, "snapshots", "--repo", repo_url, "--json", "--last"],
+                                env=env,
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                                timeout=60
+                            )
+                            if snapshots_result.stdout:
+                                snapshots = json.loads(snapshots_result.stdout)
+                                if snapshots:
+                                    snapshot_hash = snapshots[0].get("id")
+                            break
+                        except Exception as e:
+                            if not retry.should_retry(e):
+                                backup_logger.warning(f"Could not get snapshot ID: {e}")
+                                break
+                            retry.wait(e)
             
-            # Get snapshot stats
-            stats_result = subprocess.run(
-                [self.restic_binary, "stats", "--repo", repo_url, snapshot_hash or "latest"],
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            # Get snapshot stats (with retry)
+            with RetryContext(
+                max_retries=3,
+                base_delay=settings.s3_upload_retry_backoff_base,
+                max_delay=10.0
+            ) as retry:
+                for attempt in retry:
+                    try:
+                        stats_result = subprocess.run(
+                            [self.restic_binary, "stats", "--repo", repo_url, snapshot_hash or "latest"],
+                            env=env,
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                        break
+                    except Exception as e:
+                        if not retry.should_retry(e):
+                            backup_logger.warning(f"Could not get snapshot stats: {e}")
+                            break
+                        retry.wait(e)
             
             # Parse stats (rough estimate)
             total_size = 0
@@ -169,7 +309,3 @@ class ResticBackupEngine:
                 "files_count": file_count,
                 "s3_key": f"{job.s3_prefix}/restic/{snapshot_hash or snapshot_id}"
             }
-            
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Restic backup failed: {e.stderr}")
-            raise Exception(f"Restic backup failed: {e.stderr}")
