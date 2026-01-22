@@ -10,126 +10,179 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-    <header>
-        <div class="container">
-            <h1><i class="ph ph-shield-check"></i> ColdVault</h1>
-        </div>
-    </header>
-    
-    <div class="container">
-        <div id="notification" class="notification"></div>
-        
-        <div class="stats-grid" id="stats-grid">
-            <div class="stat-card">
-                <h3><i class="ph ph-folder"></i> Total Jobs</h3>
-                <div class="value" id="stat-jobs">-</div>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1><i class="ph ph-shield-check"></i> ColdVault</h1>
             </div>
-            <div class="stat-card">
-                <h3><i class="ph ph-check-circle"></i> Successful Backups</h3>
-                <div class="value" id="stat-successful">-</div>
-            </div>
-            <div class="stat-card">
-                <h3><i class="ph ph-x-circle"></i> Failed Backups</h3>
-                <div class="value" id="stat-failed">-</div>
-            </div>
-            <div class="stat-card">
-                <h3><i class="ph ph-hard-drives"></i> Total Storage</h3>
-                <div class="value" id="stat-storage">-</div>
-            </div>
-            <div class="stat-card">
-                <h3><i class="ph ph-currency-dollar"></i> Monthly Cost</h3>
-                <div class="value" id="stat-cost">-</div>
-            </div>
-        </div>
-        
-        <div class="main-tabs">
-            <button class="main-tab active" onclick="switchMainTab('jobs', event)">
-                <i class="ph ph-list-bullets"></i> Backup Jobs
-            </button>
-            <button class="main-tab" onclick="switchMainTab('metrics', event)">
-                <i class="ph ph-chart-line"></i> Metrics
-            </button>
-        </div>
-        
-        <div id="main-tab-jobs" class="main-tab-content active">
-            <div class="jobs-section">
-                <div class="jobs-header">
-                    <h2><i class="ph ph-list-bullets"></i> Backup Jobs</h2>
-                    <button class="btn" onclick="showCreateJobModal()"><i class="ph ph-plus"></i> New Job</button>
+            <nav class="sidebar-nav">
+                <a href="#/dashboard" class="nav-item" onclick="event.preventDefault(); router.navigate('/dashboard');">
+                    <i class="ph ph-gauge"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#/jobs" class="nav-item" onclick="event.preventDefault(); router.navigate('/jobs');">
+                    <i class="ph ph-list-bullets"></i>
+                    <span>Backup Jobs</span>
+                </a>
+                <div class="nav-item has-submenu" id="metrics-nav-item">
+                    <div class="nav-item-header" onclick="toggleSubmenu('metrics')">
+                        <div>
+                            <i class="ph ph-chart-line"></i>
+                            <span>Metrics</span>
+                        </div>
+                        <i class="ph ph-caret-down submenu-icon"></i>
+                    </div>
+                    <div class="submenu" id="metrics-submenu">
+                        <a href="#/metrics/overview" class="nav-item submenu-item" onclick="event.preventDefault(); router.navigate('/metrics/overview');">
+                            <span>Overview</span>
+                        </a>
+                        <a href="#/metrics/history" class="nav-item submenu-item" onclick="event.preventDefault(); router.navigate('/metrics/history');">
+                            <span>History</span>
+                        </a>
+                        <a href="#/metrics/projection" class="nav-item submenu-item" onclick="event.preventDefault(); router.navigate('/metrics/projection');">
+                            <span>Projections</span>
+                        </a>
+                    </div>
                 </div>
-                <div id="jobs-list" class="loading">Loading jobs...</div>
-            </div>
-        </div>
+            </nav>
+        </aside>
         
-        <div id="main-tab-metrics" class="main-tab-content">
-        <div class="metrics-section">
-            <div class="metrics-header">
-                <h2><i class="ph ph-chart-line"></i> Storage & Cost Metrics</h2>
-            </div>
+        <main class="main-content">
+            <div id="notification" class="notification"></div>
             
-            <div class="metrics-tabs">
-                <button class="metrics-tab active" onclick="switchMetricsTab('overview', event)">Overview</button>
-                <button class="metrics-tab" onclick="switchMetricsTab('history', event)">History</button>
-                <button class="metrics-tab" onclick="switchMetricsTab('projection', event)">Projections</button>
-            </div>
-            
-            <div id="metrics-overview" class="metrics-content active">
-                <div id="metrics-summary" class="loading">Loading metrics...</div>
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <h3 class="chart-title">Storage Usage Over Time</h3>
-                        <div class="chart-controls">
-                            <select id="storage-days" onchange="loadMetricsCharts()">
-                                <option value="7">Last 7 days</option>
-                                <option value="30" selected>Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                            </select>
+            <div id="main-tab-dashboard" class="main-tab-content">
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <h3><i class="ph ph-folder"></i> Total Jobs</h3>
+                        <div class="value" id="stat-jobs">-</div>
+                        <div class="stat-subtitle" id="stat-jobs-enabled">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3><i class="ph ph-check-circle"></i> Success Rate</h3>
+                        <div class="value" id="stat-success-rate">-</div>
+                        <div class="stat-subtitle" id="stat-successful">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3><i class="ph ph-x-circle"></i> Failed Backups</h3>
+                        <div class="value" id="stat-failed">-</div>
+                        <div class="stat-subtitle" id="stat-total-runs">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3><i class="ph ph-hard-drives"></i> Total Storage</h3>
+                        <div class="value" id="stat-storage">-</div>
+                        <div class="stat-subtitle" id="stat-storage-tb">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3><i class="ph ph-currency-dollar"></i> Monthly Cost</h3>
+                        <div class="value" id="stat-cost">-</div>
+                        <div class="stat-subtitle" id="stat-annual-cost">-</div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-header">
+                            <h3><i class="ph ph-clock-clockwise"></i> Recent Activity</h3>
+                        </div>
+                        <div class="dashboard-card-body">
+                            <div id="recent-activity" class="loading">Loading activity...</div>
                         </div>
                     </div>
-                    <div style="position: relative; height: 400px;">
-                        <canvas id="storage-chart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <h3 class="chart-title">Cost Over Time</h3>
-                        <div class="chart-controls">
-                            <select id="cost-days" onchange="loadMetricsCharts()">
-                                <option value="7">Last 7 days</option>
-                                <option value="30" selected>Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                            </select>
+                    
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-header">
+                            <h3><i class="ph ph-list-bullets"></i> Job Status Overview</h3>
+                        </div>
+                        <div class="dashboard-card-body">
+                            <div id="job-status-overview" class="loading">Loading jobs...</div>
                         </div>
                     </div>
-                    <div style="position: relative; height: 400px;">
-                        <canvas id="cost-chart"></canvas>
+                </div>
+                
+                <div class="dashboard-card">
+                    <div class="dashboard-card-header">
+                        <h3><i class="ph ph-chart-pie"></i> Storage by Job</h3>
+                    </div>
+                    <div class="dashboard-card-body">
+                        <div id="storage-breakdown" class="loading">Loading storage breakdown...</div>
                     </div>
                 </div>
             </div>
             
-            <div id="metrics-history" class="metrics-content">
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <h3 class="chart-title">Storage by Storage Class</h3>
-                        <div class="chart-controls">
-                            <select id="history-days" onchange="loadHistoryChart()">
-                                <option value="7">Last 7 days</option>
-                                <option value="30" selected>Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                            </select>
-                        </div>
+            <div id="main-tab-jobs" class="main-tab-content active">
+                <div class="jobs-section">
+                    <div class="jobs-header">
+                        <h2><i class="ph ph-list-bullets"></i> Backup Jobs</h2>
+                        <button class="btn" onclick="showCreateJobModal()"><i class="ph ph-plus"></i> New Job</button>
                     </div>
-                    <div style="position: relative; height: 400px;">
-                        <canvas id="history-chart"></canvas>
-                    </div>
+                    <div id="jobs-list" class="loading">Loading jobs...</div>
                 </div>
             </div>
             
-            <div id="metrics-projection" class="metrics-content">
-                <div id="projection-content" class="loading">Loading projections...</div>
+            <div id="main-tab-metrics" class="main-tab-content">
+                <div class="metrics-section">
+                    <div class="metrics-header">
+                        <h2><i class="ph ph-chart-line"></i> Storage & Cost Metrics</h2>
+                    </div>
+                    
+                    <div id="metrics-overview" class="metrics-content active">
+                        <div id="metrics-summary" class="loading">Loading metrics...</div>
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Storage Usage Over Time</h3>
+                                <div class="chart-controls">
+                                    <select id="storage-days" onchange="loadMetricsCharts()">
+                                        <option value="7">Last 7 days</option>
+                                        <option value="30" selected>Last 30 days</option>
+                                        <option value="90">Last 90 days</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="storage-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Cost Over Time</h3>
+                                <div class="chart-controls">
+                                    <select id="cost-days" onchange="loadMetricsCharts()">
+                                        <option value="7">Last 7 days</option>
+                                        <option value="30" selected>Last 30 days</option>
+                                        <option value="90">Last 90 days</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="cost-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="metrics-history" class="metrics-content">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3 class="chart-title">Storage by Storage Class</h3>
+                                <div class="chart-controls">
+                                    <select id="history-days" onchange="loadHistoryChart()">
+                                        <option value="7">Last 7 days</option>
+                                        <option value="30" selected>Last 30 days</option>
+                                        <option value="90">Last 90 days</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="history-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="metrics-projection" class="metrics-content">
+                        <div id="projection-content" class="loading">Loading projections...</div>
+                    </div>
+                </div>
             </div>
-        </div>
-        </div>
+        </main>
     </div>
     
     <!-- Sync Results Modal -->

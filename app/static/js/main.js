@@ -5,33 +5,341 @@
 import * as api from './api.js';
 import { formatStorage, formatCost } from './utils/formatters.js';
 import { showNotification, showError } from './components/notifications.js';
+import { router } from './utils/router.js';
+
+// Expose router globally for onclick handlers
+window.router = router;
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
-    // Load initial data
-    loadDashboard();
-    loadJobs();
+    // Set up routes
+    setupRoutes();
+    
+    // Initialize router (this will handle the initial route)
+    router.init();
     
     // Auto-refresh every 10 seconds
     setInterval(() => {
-        loadDashboard();
-        loadJobs();
+        const currentPath = router.getCurrentRoute();
+        if (currentPath === '/dashboard' || currentPath === '/') {
+            loadDashboard();
+        } else if (currentPath === '/jobs') {
+            loadJobs();
+        }
     }, 10000);
 });
+
+function setupRoutes() {
+    // Dashboard route
+    router.register('/dashboard', () => {
+        showTab('dashboard');
+        updateNavActive('dashboard');
+        loadDashboard();
+    });
+
+    router.register('/', () => {
+        router.navigate('/dashboard', true);
+    });
+
+    // Jobs route
+    router.register('/jobs', () => {
+        showTab('jobs');
+        updateNavActive('jobs');
+        loadJobs();
+    });
+
+    // Metrics routes
+    router.register('/metrics', () => {
+        router.navigate('/metrics/overview', true);
+    });
+
+    router.register('/metrics/overview', () => {
+        showTab('metrics');
+        updateNavActive('metrics');
+        showMetricsTab('overview');
+    });
+
+    router.register('/metrics/history', () => {
+        showTab('metrics');
+        updateNavActive('metrics');
+        showMetricsTab('history');
+    });
+
+    router.register('/metrics/projection', () => {
+        showTab('metrics');
+        updateNavActive('metrics');
+        showMetricsTab('projection');
+    });
+}
+
+function showTab(tab) {
+    // Update content visibility
+    document.querySelectorAll('.main-tab-content').forEach(content => content.classList.remove('active'));
+    const targetContent = document.getElementById(`main-tab-${tab}`);
+    if (targetContent) {
+        targetContent.classList.add('active');
+    }
+    
+    // Update nav items (only top-level, not submenu items)
+    document.querySelectorAll('.nav-item').forEach(item => {
+        if (!item.closest('.submenu') && !item.classList.contains('submenu-item')) {
+            item.classList.remove('active');
+        }
+    });
+    
+    // Activate the correct nav item
+    if (tab === 'dashboard') {
+        const dashboardItem = Array.from(document.querySelectorAll('.nav-item')).find(item => {
+            const icon = item.querySelector('i');
+            return icon && icon.className.includes('ph-gauge');
+        });
+        if (dashboardItem) dashboardItem.classList.add('active');
+    } else if (tab === 'jobs') {
+        const jobsItem = Array.from(document.querySelectorAll('.nav-item')).find(item => {
+            const icon = item.querySelector('i');
+            return icon && icon.className.includes('ph-list-bullets');
+        });
+        if (jobsItem) jobsItem.classList.add('active');
+    } else if (tab === 'metrics') {
+        const metricsNav = document.getElementById('metrics-nav-item');
+        if (metricsNav) {
+            metricsNav.classList.add('active');
+            if (!metricsNav.classList.contains('expanded')) {
+                metricsNav.classList.add('expanded');
+            }
+        }
+    }
+}
+
+function updateNavActive(activeTab) {
+    // Update main nav items
+    document.querySelectorAll('.nav-item').forEach(item => {
+        if (!item.closest('.submenu') && !item.classList.contains('submenu-item')) {
+            item.classList.remove('active');
+        }
+    });
+
+    // Activate the correct nav item
+    if (activeTab === 'dashboard') {
+        const dashboardItem = Array.from(document.querySelectorAll('.nav-item')).find(item => {
+            const icon = item.querySelector('i');
+            return icon && icon.className.includes('ph-gauge');
+        });
+        if (dashboardItem) dashboardItem.classList.add('active');
+    } else if (activeTab === 'jobs') {
+        const jobsItem = Array.from(document.querySelectorAll('.nav-item')).find(item => {
+            const icon = item.querySelector('i');
+            return icon && icon.className.includes('ph-list-bullets');
+        });
+        if (jobsItem) jobsItem.classList.add('active');
+    } else if (activeTab === 'metrics') {
+        const metricsItem = document.getElementById('metrics-nav-item');
+        if (metricsItem) {
+            metricsItem.classList.add('active');
+            if (!metricsItem.classList.contains('expanded')) {
+                metricsItem.classList.add('expanded');
+            }
+        }
+    }
+}
 
 // Essential functions for page loading
 async function loadDashboard() {
     try {
         const overview = await api.getDashboardOverview();
         
+        // Update stat cards
         document.getElementById('stat-jobs').textContent = overview.jobs.total;
-        document.getElementById('stat-successful').textContent = overview.backups.successful;
+        const jobsEnabled = document.getElementById('stat-jobs-enabled');
+        if (jobsEnabled) {
+            jobsEnabled.textContent = `${overview.jobs.enabled} enabled`;
+        }
+        
+        const successRate = document.getElementById('stat-success-rate');
+        if (successRate) {
+            successRate.textContent = `${overview.backups.success_rate.toFixed(1)}%`;
+        }
+        document.getElementById('stat-successful').textContent = `${overview.backups.successful} successful`;
+        
         document.getElementById('stat-failed').textContent = overview.backups.failed;
+        const totalRuns = document.getElementById('stat-total-runs');
+        if (totalRuns) {
+            totalRuns.textContent = `${overview.backups.total} total runs`;
+        }
+        
         document.getElementById('stat-storage').textContent = formatStorage(overview.storage.total_bytes);
+        const storageTb = document.getElementById('stat-storage-tb');
+        if (storageTb) {
+            storageTb.textContent = `${overview.storage.total_tb.toFixed(2)} TB`;
+        }
+        
         document.getElementById('stat-cost').textContent = formatCost(overview.costs.monthly_estimate);
+        const annualCost = document.getElementById('stat-annual-cost');
+        if (annualCost) {
+            const annual = overview.costs.monthly_estimate * 12;
+            annualCost.textContent = `${formatCost(annual)}/year`;
+        }
+        
+        // Load recent activity
+        loadRecentActivity(overview.recent_activity || []);
+        
+        // Load job status overview
+        await loadJobStatusOverview();
+        
+        // Load storage breakdown
+        await loadStorageBreakdown();
     } catch (error) {
         showError(`Failed to load dashboard: ${error.message}`);
     }
+}
+
+async function loadRecentActivity(activities) {
+    const container = document.getElementById('recent-activity');
+    if (!container) return;
+    
+    if (!activities || activities.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No recent activity</div>';
+        return;
+    }
+    
+    // Get job names for display
+    const jobs = await api.getJobs();
+    const jobMap = new Map(jobs.map(j => [j.id, j.name]));
+    
+    container.innerHTML = activities.map(activity => {
+        const jobName = jobMap.get(activity.job_id) || `Job #${activity.job_id}`;
+        const status = activity.status || 'unknown';
+        const statusClass = status.toLowerCase();
+        const startedAt = activity.started_at ? new Date(activity.started_at) : null;
+        const duration = activity.duration_seconds ? formatDuration(activity.duration_seconds) : 'N/A';
+        
+        const statusIcon = status === 'success' ? 'ph-check-circle' :
+                          status === 'failed' ? 'ph-x-circle' :
+                          status === 'running' ? 'ph-circle-notch' :
+                          'ph-clock';
+        
+        return `
+            <div class="activity-item">
+                <div class="activity-status status-${statusClass}">
+                    <i class="ph ${statusIcon}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">${jobName}</div>
+                    <div class="activity-meta">
+                        ${startedAt ? startedAt.toLocaleString() : 'Unknown time'} • ${duration}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function loadJobStatusOverview() {
+    const container = document.getElementById('job-status-overview');
+    if (!container) return;
+    
+    try {
+        const jobs = await api.getJobs();
+        
+        if (jobs.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No jobs configured</div>';
+            return;
+        }
+        
+        container.innerHTML = jobs.map(job => {
+            const status = job.last_run_status || 'pending';
+            const statusClass = status.toLowerCase();
+            const statusIcon = status === 'success' ? 'ph-check-circle' :
+                              status === 'failed' ? 'ph-x-circle' :
+                              status === 'running' ? 'ph-circle-notch' :
+                              'ph-clock';
+            
+            const lastRun = job.last_run_at ? new Date(job.last_run_at).toLocaleString() : 'Never';
+            const nextRun = job.next_run_at ? new Date(job.next_run_at).toLocaleString() : 'N/A';
+            
+            return `
+                <div class="job-status-item">
+                    <div class="job-status-info">
+                        <div class="job-status-name">${job.name}</div>
+                        <div class="job-status-meta">
+                            <span><i class="ph ph-calendar"></i> Last: ${lastRun}</span>
+                            ${job.next_run_at ? `<span><i class="ph ph-calendar-check"></i> Next: ${nextRun}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="job-status-badge status-${statusClass}">
+                        <i class="ph ${statusIcon}"></i>
+                        <span>${status}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        container.innerHTML = `<div class="error">Failed to load jobs: ${error.message}</div>`;
+    }
+}
+
+async function loadStorageBreakdown() {
+    const container = document.getElementById('storage-breakdown');
+    if (!container) return;
+    
+    try {
+        const jobs = await api.getJobs();
+        const breakdown = [];
+        
+        for (const job of jobs) {
+            try {
+                const stats = await api.getJobStats(job.id);
+                if (stats.snapshots && stats.snapshots.total_size_bytes > 0) {
+                    breakdown.push({
+                        name: job.name,
+                        size: stats.snapshots.total_size_bytes,
+                        count: stats.snapshots.count
+                    });
+                }
+            } catch (error) {
+                console.error(`Failed to load stats for job ${job.id}:`, error);
+            }
+        }
+        
+        if (breakdown.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No storage data available</div>';
+            return;
+        }
+        
+        // Sort by size descending
+        breakdown.sort((a, b) => b.size - a.size);
+        const totalSize = breakdown.reduce((sum, item) => sum + item.size, 0);
+        
+        container.innerHTML = breakdown.map(item => {
+            const percentage = (item.size / totalSize * 100).toFixed(1);
+            return `
+                <div class="storage-item">
+                    <div class="storage-item-header">
+                        <div class="storage-item-name">${item.name}</div>
+                        <div class="storage-item-size">${formatStorage(item.size)}</div>
+                    </div>
+                    <div class="storage-item-bar">
+                        <div class="storage-item-bar-fill" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="storage-item-meta">
+                        <span>${item.count} snapshots</span>
+                        <span>${percentage}% of total</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        container.innerHTML = `<div class="error">Failed to load storage breakdown: ${error.message}</div>`;
+    }
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return 'N/A';
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
 }
 
 // Track which job logs are expanded
@@ -493,51 +801,64 @@ let costChart = null;
 let historyChart = null;
 
 window.switchMainTab = (tab, event) => {
-    document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
-    if (event && event.target) {
-        const button = event.target.closest('.main-tab');
-        if (button) button.classList.add('active');
+    // Navigate using router instead of direct tab switching
+    if (tab === 'dashboard') {
+        router.navigate('/dashboard');
+    } else if (tab === 'jobs') {
+        router.navigate('/jobs');
+    } else if (tab === 'metrics') {
+        router.navigate('/metrics/overview');
     }
-    
-    document.querySelectorAll('.main-tab-content').forEach(content => content.classList.remove('active'));
-    const targetContent = document.getElementById(`main-tab-${tab}`);
-    if (targetContent) {
-        targetContent.classList.add('active');
-    }
-    
-    if (tab === 'metrics') {
-        waitForChart(() => {
-            try {
-                loadMetricsSummary();
-                loadMetricsCharts();
-            } catch (error) {
-                console.error('Error loading metrics:', error);
-            }
-        });
+};
+
+window.toggleSubmenu = (menuId) => {
+    const navItem = document.getElementById(`${menuId}-nav-item`);
+    if (navItem) {
+        navItem.classList.toggle('expanded');
     }
 };
 
 window.switchMetricsTab = (tab, event) => {
-    document.querySelectorAll('.metrics-tab').forEach(btn => btn.classList.remove('active'));
-    if (event && event.target) {
-        event.target.classList.add('active');
-    }
+    // Navigate using router
+    router.navigate(`/metrics/${tab}`);
+};
+
+function showMetricsTab(tab) {
+    // Update submenu items
+    document.querySelectorAll('.submenu-item').forEach(item => item.classList.remove('active'));
     
+    // Activate the correct submenu item
+    const submenuItems = document.querySelectorAll('.submenu-item');
+    submenuItems.forEach((item) => {
+        const text = item.textContent.trim().toLowerCase();
+        if ((tab === 'overview' && text === 'overview') ||
+            (tab === 'history' && text === 'history') ||
+            (tab === 'projection' && (text === 'projection' || text === 'projections'))) {
+            item.classList.add('active');
+        }
+    });
+    
+    // Update content
     document.querySelectorAll('.metrics-content').forEach(content => content.classList.remove('active'));
     const targetContent = document.getElementById(`metrics-${tab}`);
     if (targetContent) {
         targetContent.classList.add('active');
     }
     
+    // Load the appropriate data
     if (tab === 'overview') {
-        loadMetricsSummary();
-        loadMetricsCharts();
+        waitForChart(() => {
+            loadMetricsSummary();
+            loadMetricsCharts();
+        });
     } else if (tab === 'history') {
-        loadHistoryChart();
+        waitForChart(() => {
+            loadHistoryChart();
+        });
     } else if (tab === 'projection') {
         loadProjections();
     }
-};
+}
 
 async function loadMetricsSummary() {
     const container = document.getElementById('metrics-summary');

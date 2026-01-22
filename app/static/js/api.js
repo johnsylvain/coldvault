@@ -67,6 +67,10 @@ export async function getDashboardOverview() {
     return fetchJSON(`${API_BASE}/dashboard/overview`);
 }
 
+export async function getJobStats(jobId) {
+    return fetchJSON(`${API_BASE}/dashboard/jobs/${jobId}/stats`);
+}
+
 // Jobs API
 export async function getJobs() {
     return fetchJSON(`${API_BASE}/jobs/`);
