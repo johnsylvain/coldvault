@@ -106,8 +106,8 @@ def calculate_projected_time(job_id: int, db: Session) -> dict:
             'projected_completion_at': None
         }
     
-    # Calculate elapsed time
-    elapsed = (datetime.utcnow() - current_run.started_at).total_seconds()
+    # Calculate elapsed time (ensure it's always positive to handle edge cases)
+    elapsed = max(0, (datetime.utcnow() - current_run.started_at).total_seconds())
     
     # Get average duration from successful historical runs (last 10)
     historical_runs = db.query(BackupRun).filter(

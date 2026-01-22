@@ -32,7 +32,7 @@ def calculate_projected_completion(job_id: int, current_run_id: int, db: Session
         return projected_completion_at.isoformat()
     else:
         # If no historical data, estimate based on elapsed time (assume 50% progress)
-        elapsed = (datetime.utcnow() - current_run.started_at).total_seconds()
+        elapsed = max(0, (datetime.utcnow() - current_run.started_at).total_seconds())
         if elapsed > 0:
             projected_completion = elapsed * 2
             projected_completion_at = current_run.started_at.replace(tzinfo=None) + timedelta(seconds=projected_completion)
@@ -86,7 +86,7 @@ def get_overview(db: Session = Depends(get_db)):
                 "status": run.status.value if run.status else None,
                 "started_at": run.started_at.isoformat() if run.started_at else None,
                 "duration_seconds": run.duration_seconds,
-                "elapsed_seconds": (datetime.utcnow() - run.started_at).total_seconds() if run.status == BackupStatus.RUNNING and run.started_at else None,
+                "elapsed_seconds": max(0, (datetime.utcnow() - run.started_at).total_seconds()) if run.status == BackupStatus.RUNNING and run.started_at else None,
                 "projected_completion_at": calculate_projected_completion(run.job_id, run.id, db) if run.status == BackupStatus.RUNNING else None
             }
             for run in recent_runs

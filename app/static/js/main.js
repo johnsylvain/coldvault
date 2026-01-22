@@ -639,7 +639,8 @@ function updateJobRuntimeDisplay(jobId, startTime, projectedCompletion) {
     if (!jobItem) return;
     
     const now = new Date();
-    const elapsed = Math.floor((now - startTime) / 1000);
+    // Ensure elapsed time is always positive (handle timezone/clock sync issues)
+    const elapsed = Math.max(0, Math.floor((now - startTime) / 1000));
     
     // Find and update runtime display
     const metaContainer = jobItem.querySelector('.job-info .meta');
