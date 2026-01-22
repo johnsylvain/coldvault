@@ -22,3 +22,10 @@ htmlcov/
 coverage.xml
 .pytest_cache/
 .tox/
+
+# Terraform
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl

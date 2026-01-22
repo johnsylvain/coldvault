@@ -1,5 +1,16 @@
 # AWS Setup Guide for ColdVault
 
+## Setup Options
+
+**Option 1: Terraform (Automated)** - Recommended for infrastructure automation
+- See [terraform/README.md](terraform/README.md) for automated setup
+- Supports importing existing buckets without data loss
+- Automatically configures IAM, lifecycle rules, and cost monitoring
+
+**Option 2: Manual Setup** - Follow the steps below
+
+---
+
 ## Billing Requirements
 
 **Yes, you need billing set up on your AWS account** to use S3 and Glacier storage, even though Glacier Deep Archive is very inexpensive (~$0.00099/GB/month).
@@ -31,6 +42,23 @@ For Glacier Deep Archive (cheapest option):
 4. Select a region (remember this for `AWS_REGION` in .env)
 5. **Important**: Uncheck "Block all public access" if you want (or leave it checked for security)
 6. Click "Create bucket"
+
+### 2a. Set Up Lifecycle Rules for Manifest Files (CRITICAL)
+
+**IMPORTANT**: Manifest files (`.manifest.json`) must stay in STANDARD storage class for immediate access. The application code already uploads them to STANDARD, but setting up a lifecycle rule provides additional protection.
+
+**Option A: AWS Console**
+1. Go to your S3 bucket → **Management** tab
+2. Click **Create lifecycle rule**
+3. Rule name: `keep-manifests-in-standard`
+4. **Scope**: Apply to all objects in the bucket
+5. **Transitions**: Leave empty (no transitions)
+6. Click **Create rule**
+
+**Option B: AWS CLI**
+See [terraform/LIFECYCLE_RULES.md](terraform/LIFECYCLE_RULES.md) for detailed AWS CLI commands.
+
+**Why this matters**: If manifest files end up in Deep Archive, you'll need to wait hours/days for restore requests. STANDARD storage provides immediate access.
 
 ### 3. Create IAM User and Access Keys
 
@@ -162,3 +190,14 @@ AWS Free Tier includes:
 - Glacier requires billing to be set up
 
 Even with billing set up, Glacier Deep Archive is extremely cheap for long-term backups.
+
+## Terraform Alternative
+
+If you prefer automated infrastructure setup, see [terraform/README.md](terraform/README.md) for:
+- Automated bucket creation
+- IAM user and policy setup
+- Lifecycle rules configuration
+- Cost monitoring budgets
+- Import existing buckets without data loss
+
+Terraform is **optional** - you can still use the manual setup above.

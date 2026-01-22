@@ -394,6 +394,8 @@ class SyncWorker:
             json.dump(manifest_data, f, indent=2)
         
         try:
+            # Manifest files use STANDARD storage class for fast access (not Deep Archive)
+            manifest_storage_class = "STANDARD"
             if job.encryption_enabled:
                 encrypted_manifest = manifest_file + ".encrypted"
                 from app.encryption import encrypt_file
@@ -402,7 +404,7 @@ class SyncWorker:
                     encrypted_manifest,
                     job.s3_bucket,
                     manifest_key,
-                    storage_class=job.storage_class.value if hasattr(job.storage_class, 'value') else "DEEP_ARCHIVE"
+                    storage_class=manifest_storage_class
                 )
                 os.unlink(encrypted_manifest)
             else:
@@ -410,7 +412,7 @@ class SyncWorker:
                     manifest_file,
                     job.s3_bucket,
                     manifest_key,
-                    storage_class=job.storage_class.value if hasattr(job.storage_class, 'value') else "DEEP_ARCHIVE"
+                    storage_class=manifest_storage_class
                 )
         finally:
             if os.path.exists(manifest_file):

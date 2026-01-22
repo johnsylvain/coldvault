@@ -486,16 +486,18 @@ class IncrementalBackupEngine:
         
         # Upload manifest (encrypt if needed, but keep original key name)
         # Use consistent manifest key (without timestamp) for consolidated backup strategy
+        # Manifest files use STANDARD storage class for fast access (not Deep Archive)
         manifest_key = f"{job.s3_prefix}/{job.name}.manifest.json"
+        manifest_storage_class = "STANDARD"  # Always use STANDARD for manifest files for fast access
         if job.encryption_enabled:
             # Encrypt manifest to temp file
             encrypted_manifest = manifest_file + ".encrypted"
             encrypt_file(manifest_file, encrypted_manifest, settings.encryption_key)
             # Upload encrypted version but keep original key name
-            s3_client.upload_file(encrypted_manifest, job.s3_bucket, manifest_key, storage_class=s3_storage_class)
+            s3_client.upload_file(encrypted_manifest, job.s3_bucket, manifest_key, storage_class=manifest_storage_class)
             os.unlink(encrypted_manifest)
         else:
-            s3_client.upload_file(manifest_file, job.s3_bucket, manifest_key, storage_class=s3_storage_class)
+            s3_client.upload_file(manifest_file, job.s3_bucket, manifest_key, storage_class=manifest_storage_class)
         
         backup_logger.info("Uploading manifest...")
         backup_logger.info(f"Manifest uploaded: s3://{job.s3_bucket}/{manifest_key}")
