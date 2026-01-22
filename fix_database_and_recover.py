@@ -94,7 +94,10 @@ def recover_stuck_backup(backup_run_id: int = None):
             ).all()
             
             # Also check for runs with snapshots but wrong status (failed due to DB error)
-            runs_with_snapshots = db.query(BackupRun).join(Snapshot).filter(
+            # Use explicit join condition for SQLAlchemy 2.0+
+            runs_with_snapshots = db.query(BackupRun).join(
+                Snapshot, BackupRun.id == Snapshot.backup_run_id
+            ).filter(
                 BackupRun.status != BackupStatus.SUCCESS
             ).all()
             
