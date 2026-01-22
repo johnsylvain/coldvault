@@ -5,7 +5,10 @@ Refresh storage metrics from database snapshots
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add parent directory to path so we can import app
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.insert(0, parent_dir)
 
 from app.database import SessionLocal, Snapshot, StorageMetrics
 from app.metrics import metrics_service

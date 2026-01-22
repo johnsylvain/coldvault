@@ -10,8 +10,10 @@ import sys
 import os
 from datetime import datetime
 
-# Add app to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add parent directory to path so we can import app
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.insert(0, parent_dir)
 
 from app.database import SessionLocal, BackupRun, Snapshot, BackupStatus, engine
 from app.config import settings
