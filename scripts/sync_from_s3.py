@@ -58,10 +58,28 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
     logger.info(f"Looking for manifest: s3://{job.s3_bucket}/{manifest_key}")
     
     manifest_exists = s3_client.object_exists(job.s3_bucket, manifest_key)
+    manifest_accessible = False
+    manifest = None
     
-    if not manifest_exists:
-        logger.warning(f"Manifest not found at {manifest_key}")
-        logger.info("Scanning S3 for files...")
+    if manifest_exists:
+        # Try to load manifest, but it might be in Glacier
+        logger.info("Attempting to load manifest...")
+        try:
+            manifest = load_manifest(job, manifest_key)
+            if manifest:
+                manifest_accessible = True
+                logger.info("✓ Manifest loaded successfully")
+        except Exception as e:
+            error_msg = str(e)
+            if "InvalidObjectState" in error_msg or "storage class" in error_msg.lower():
+                logger.warning(f"Manifest is in Glacier storage class and needs restore: {e}")
+                logger.info("Will scan S3 files directly instead")
+            else:
+                logger.warning(f"Failed to load manifest: {e}")
+                logger.info("Will scan S3 files directly instead")
+    
+    if not manifest_accessible:
+        logger.info("Scanning S3 for files (manifest not accessible or not found)...")
         
         # List files in S3
         s3_prefix = f"{job.s3_prefix}/{job.name}/"
@@ -83,68 +101,22 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
         logger.info(f"Total size: {total_size / (1024**3):.2f} GB")
         logger.info(f"Total files: {total_files:,}")
         
-        # Check if snapshot exists
-        existing_snapshot = db.query(Snapshot).filter(
-            Snapshot.job_id == job.id,
-            Snapshot.retained == True
-        ).order_by(Snapshot.created_at.desc()).first()
+        # Store for later use
+        use_file_scan = True
+    elif manifest_accessible and manifest:
+        # Use manifest data
+        files_dict = manifest.get('files', {})
+        total_size = sum(f.get('size', 0) for f in files_dict.values())
+        total_files = len(files_dict)
         
-        if existing_snapshot:
-            logger.info(f"Found existing snapshot ID: {existing_snapshot.snapshot_id}")
-            if not dry_run:
-                # Update existing snapshot
-                existing_snapshot.size_bytes = total_size
-                existing_snapshot.files_count = total_files
-                existing_snapshot.s3_key = f"{job.s3_prefix}/{job.name}/"
-                existing_snapshot.manifest_key = manifest_key if manifest_exists else None
-                db.commit()
-                logger.info("✓ Updated existing snapshot")
-        else:
-            # Create new snapshot
-            snapshot_id = f"{job.name}_synced_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-            logger.info(f"Creating new snapshot: {snapshot_id}")
-            
-            if not dry_run:
-                snapshot = Snapshot(
-                    job_id=job.id,
-                    snapshot_id=snapshot_id,
-                    size_bytes=total_size,
-                    files_count=total_files,
-                    s3_key=f"{job.s3_prefix}/{job.name}/",
-                    manifest_key=manifest_key if manifest_exists else None,
-                    storage_class=job.storage_class,
-                    is_incremental=True,
-                    retained=True
-                )
-                db.add(snapshot)
-                db.commit()
-                logger.info("✓ Created new snapshot")
-        
-        return {
-            "status": "synced",
-            "snapshot_id": existing_snapshot.snapshot_id if existing_snapshot else snapshot_id,
-            "total_size_bytes": total_size,
-            "total_size_gb": round(total_size / (1024**3), 2),
-            "files_count": total_files,
-            "manifest_exists": manifest_exists
-        }
-    
-    # Manifest exists - load it
-    logger.info("Loading manifest from S3...")
-    manifest = load_manifest(job, manifest_key)
-    
-    if not manifest:
-        logger.error("Failed to load manifest")
+        logger.info(f"Using manifest data: {total_files:,} files, {total_size / (1024**3):.2f} GB")
+        use_file_scan = False
+    else:
+        # Neither worked
         return {
             "status": "error",
-            "message": "Manifest exists but could not be loaded"
+            "message": "Could not load manifest (in Glacier) and no files found in S3"
         }
-    
-    files = manifest.get('files', {})
-    total_size = sum(f.get('size', 0) for f in files.values())
-    total_files = len(files)
-    
-    logger.info(f"Manifest loaded: {total_files:,} files, {total_size / (1024**3):.2f} GB")
     
     # Check if snapshot exists
     existing_snapshot = db.query(Snapshot).filter(
@@ -155,14 +127,21 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
     if existing_snapshot:
         logger.info(f"Found existing snapshot ID: {existing_snapshot.snapshot_id}")
         if not dry_run:
+            # Update existing snapshot
             existing_snapshot.size_bytes = total_size
             existing_snapshot.files_count = total_files
-            existing_snapshot.manifest_key = manifest_key
+            existing_snapshot.s3_key = f"{job.s3_prefix}/{job.name}/"
+            # Set manifest_key if manifest exists (even if in Glacier)
+            existing_snapshot.manifest_key = manifest_key if manifest_exists else None
             db.commit()
             logger.info("✓ Updated existing snapshot")
         snapshot_id = existing_snapshot.snapshot_id
     else:
-        snapshot_id = manifest.get('snapshot_id', f"{job.name}_synced_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}")
+        # Create new snapshot
+        if manifest_accessible and manifest:
+            snapshot_id = manifest.get('snapshot_id', f"{job.name}_synced_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}")
+        else:
+            snapshot_id = f"{job.name}_synced_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         logger.info(f"Creating new snapshot: {snapshot_id}")
         
         if not dry_run:
@@ -172,7 +151,7 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
                 size_bytes=total_size,
                 files_count=total_files,
                 s3_key=f"{job.s3_prefix}/{job.name}/",
-                manifest_key=manifest_key,
+                manifest_key=manifest_key if manifest_exists else None,
                 storage_class=job.storage_class,
                 is_incremental=True,
                 retained=True
@@ -187,7 +166,9 @@ def sync_incremental_backup_from_s3(job: Job, db, dry_run: bool) -> Dict:
         "total_size_bytes": total_size,
         "total_size_gb": round(total_size / (1024**3), 2),
         "files_count": total_files,
-        "manifest_exists": True
+        "manifest_exists": manifest_exists,
+        "manifest_accessible": manifest_accessible,
+        "source": "manifest" if manifest_accessible else "s3_scan"
     }
 
 
