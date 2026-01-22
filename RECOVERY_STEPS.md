@@ -34,7 +34,7 @@ docker-compose ps
 Run the recovery script inside the container to fix the database columns:
 
 ```bash
-docker-compose exec coldvault python fix_database_and_recover.py --fix-schema
+docker-compose exec coldvault python scripts/fix_database_and_recover.py --fix-schema
 ```
 
 **Alternative:** If the exec command doesn't work, you can run it directly:
@@ -42,8 +42,14 @@ docker-compose exec coldvault python fix_database_and_recover.py --fix-schema
 ```bash
 docker-compose exec coldvault bash
 # Then inside the container:
-python fix_database_and_recover.py --fix-schema
+python scripts/fix_database_and_recover.py --fix-schema
 exit
+```
+
+**Or use the direct SQL script:**
+
+```bash
+./scripts/fix_schema_direct.sh
 ```
 
 ### Step 5: Recover the stuck backup job
@@ -51,13 +57,13 @@ exit
 Recover backup run ID 3 (from your error log):
 
 ```bash
-docker-compose exec coldvault python fix_database_and_recover.py --recover 3
+docker-compose exec coldvault python scripts/fix_database_and_recover.py --recover 3
 ```
 
 **Or do both steps 4 and 5 at once:**
 
 ```bash
-docker-compose exec coldvault python fix_database_and_recover.py --all
+docker-compose exec coldvault python scripts/fix_database_and_recover.py --all
 ```
 
 ### Step 6: Verify the recovery
@@ -101,3 +107,4 @@ If you get connection errors in step 4/5:
 If the recovery script can't find the backup run:
 - Check the backup run ID in the error log (it was 3 in your case)
 - List all backup runs: `docker-compose exec coldvault python -c "from app.database import SessionLocal, BackupRun; db = SessionLocal(); runs = db.query(BackupRun).all(); [print(f'ID: {r.id}, Status: {r.status}, Job: {r.job_id}') for r in runs]"`
+- Refresh storage metrics: `docker-compose exec coldvault python scripts/refresh_storage_metrics.py`
